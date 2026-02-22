@@ -1,43 +1,43 @@
-import { useState } from 'react';
-import AdminSidebar from './components/AdminSidebar';
+import { useState, useEffect } from 'react';
+import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import type { User } from './types';
+import { AppContext } from './context';
+import InventoryManagementLayout from './components/InventoryManagementLayout';
 
-// Mock admin user
-const mockUser = {
+const DEMO_ADMIN: User = {
+  id: 'admin-1',
   name: 'Admin User',
   email: 'admin@cloudlaundry.lk',
-  adminRole: 'System Administrator',
+  role: 'admin',
+  verified: true,
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [user] = useState<User>(DEMO_ADMIN);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
-  const handleLogout = () => {
-    alert('Logged out');
-  };
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    localStorage.setItem('theme', theme);
+    localStorage.setItem('user', JSON.stringify(DEMO_ADMIN));
+  }, [theme]);
 
   return (
-    <div className="flex min-h-screen bg-[#FDFCFE]">
-
-      {/* ── Sidebar ── */}
-      <AdminSidebar
-        user={mockUser}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onLogout={handleLogout}
-      />
-
-      {/* ── Main content placeholder ── */}
-      <main className="flex-1 ml-64 flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <p className="text-gray-400 text-sm uppercase tracking-widest font-bold mb-2">
-            Active Tab
-          </p>
-          <p className="text-purple-600 text-3xl font-black capitalize">
-            {activeTab.replace('-', ' ')}
-          </p>
-        </div>
-      </main>
-
-    </div>
+    <AppContext.Provider value={{
+      user,
+      setUser: () => {},
+      theme,
+      setTheme,
+      handleLogout: () => window.location.reload(),
+      showProfileModal,
+      setShowProfileModal,
+    }}>
+      <Router>
+        <Routes>
+          <Route path="/*" element={<InventoryManagementLayout />} />
+        </Routes>
+      </Router>
+    </AppContext.Provider>
   );
 }
