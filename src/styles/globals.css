@@ -1,0 +1,541 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+  --background: #ffffff;
+  --foreground: oklch(0.145 0 0);
+  --card: #ffffff;
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: #030213;
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.95 0.0058 264.53);
+  --secondary-foreground: #030213;
+  --muted: #ececf0;
+  --muted-foreground: #717182;
+  --accent: #e9ebef;
+  --accent-foreground: #030213;
+  --destructive: #d4183d;
+  --destructive-foreground: #ffffff;
+  --border: rgba(0, 0, 0, 0.1);
+  --input: transparent;
+  --input-background: #f3f3f5;
+  --switch-background: #cbced4;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: #030213;
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/**
+ * Base typography. This is not applied to elements which have an ancestor with a Tailwind text class.
+ */
+@layer base {
+  :where(:not(:has([class*=' text-']), :not(:has([class^='text-'])))) {
+    h1 {
+      font-size: var(--text-2xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h2 {
+      font-size: var(--text-xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h3 {
+      font-size: var(--text-lg);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h4 {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    label {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    button {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    input {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+  }
+}
+
+html {
+  font-size: var(--font-size);
+  min-width: 1512px;
+  max-width: 1512px;
+  margin: 0 auto;
+  overflow-x: auto;
+}
+
+body {
+  min-width: 1512px;
+  max-width: 1512px;
+  margin: 0 auto;
+  overflow-x: auto;
+}
+
+#root {
+  min-width: 1512px;
+  max-width: 1512px;
+  margin: 0 auto;
+}
+
+/* MacBook Pro 14" Frame Container */
+.app-container {
+  width: 1512px;
+  min-height: 982px;
+  margin: 0 auto;
+}
+
+/* React DatePicker Custom Styling for Purple Theme */
+.react-datepicker-wrapper {
+  width: 100%;
+}
+
+.react-datepicker {
+  font-family: inherit;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+
+.react-datepicker__header {
+  background-color: #9333ea;
+  border-bottom: none;
+  border-radius: 0.75rem 0.75rem 0 0;
+  padding-top: 1rem;
+}
+
+.react-datepicker__current-month {
+  color: white;
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.react-datepicker__day-name {
+  color: white;
+  font-weight: 500;
+  width: 2.5rem;
+  line-height: 2.5rem;
+}
+
+.react-datepicker__day {
+  width: 2.5rem;
+  line-height: 2.5rem;
+  margin: 0.2rem;
+  border-radius: 0.5rem;
+  color: #374151;
+}
+
+.react-datepicker__day:hover {
+  background-color: #f3e8ff;
+  color: #9333ea;
+}
+
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected {
+  background-color: #9333ea;
+  color: white;
+  font-weight: 600;
+}
+
+.react-datepicker__day--selected:hover,
+.react-datepicker__day--keyboard-selected:hover {
+  background-color: #7e22ce;
+}
+
+.react-datepicker__day--disabled {
+  color: #d1d5db;
+  cursor: not-allowed;
+}
+
+.react-datepicker__day--disabled:hover {
+  background-color: transparent;
+  color: #d1d5db;
+}
+
+.react-datepicker__day--outside-month {
+  color: #9ca3af;
+}
+
+.react-datepicker__navigation {
+  top: 1rem;
+}
+
+.react-datepicker__navigation-icon::before {
+  border-color: white;
+  border-width: 2px 2px 0 0;
+  height: 9px;
+  width: 9px;
+}
+
+.react-datepicker__navigation:hover *::before {
+  border-color: #f3e8ff;
+}
+
+.react-datepicker__month {
+  margin: 1rem;
+}
+
+.react-datepicker__day--today {
+  font-weight: 600;
+  border: 2px solid #9333ea;
+  background-color: #faf5ff;
+}
+
+/* Print Styles for A4 Invoice */
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+  
+  * {
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+  
+  body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* Hide everything that's not the invoice */
+  header,
+  nav,
+  button,
+  .print\:hidden {
+    display: none !important;
+  }
+  
+  /* Force show invoice */
+  .invoice-printable {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: white !important;
+    overflow: visible !important;
+  }
+  
+  /* Make all children visible */
+  .invoice-printable * {
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  /* Force show container elements */
+  body,
+  #root,
+  #root > *,
+  .container {
+    display: block !important;
+    background: white !important;
+  }
+  
+  /* Override any potential hiding */
+  .invoice-printable,
+  .invoice-printable > *,
+  .invoice-printable > * > * {
+    display: revert !important;
+  }
+  
+  /* Specific element displays */
+  .invoice-printable div {
+    display: block !important;
+  }
+  
+  .invoice-printable table {
+    display: table !important;
+    page-break-inside: avoid !important;
+    border-collapse: collapse !important;
+  }
+  
+  .invoice-printable thead {
+    display: table-header-group !important;
+  }
+  
+  .invoice-printable tbody {
+    display: table-row-group !important;
+  }
+  
+  .invoice-printable tr {
+    display: table-row !important;
+    page-break-inside: avoid !important;
+  }
+  
+  .invoice-printable th,
+  .invoice-printable td {
+    display: table-cell !important;
+  }
+  
+  .invoice-printable p {
+    display: block !important;
+  }
+  
+  .invoice-printable h1,
+  .invoice-printable h2,
+  .invoice-printable h3,
+  .invoice-printable h4 {
+    display: block !important;
+  }
+  
+  .invoice-printable img,
+  .invoice-printable svg,
+  .invoice-printable canvas {
+    display: inline-block !important;
+  }
+  
+  /* Flex and grid layouts */
+  .invoice-printable .flex {
+    display: flex !important;
+  }
+  
+  .invoice-printable .grid {
+    display: grid !important;
+  }
+  
+  /* Override dark mode */
+  .invoice-printable.bg-gray-800,
+  .invoice-printable.bg-gray-900 {
+    background: white !important;
+    color: black !important;
+  }
+  
+  /* Keep branded colors */
+  .invoice-printable .bg-gradient-to-r {
+    background: linear-gradient(to right, #9333ea, #7e22ce) !important;
+  }
+  
+  .invoice-printable .bg-purple-600 {
+    background-color: #9333ea !important;
+    color: white !important;
+  }
+  
+  .invoice-printable .bg-purple-50 {
+    background-color: #faf5ff !important;
+  }
+  
+  .invoice-printable .bg-purple-100 {
+    background-color: #f3e8ff !important;
+  }
+  
+  .invoice-printable .bg-green-50 {
+    background-color: #f0fdf4 !important;
+  }
+  
+  .invoice-printable .bg-green-100 {
+    background-color: #dcfce7 !important;
+  }
+  
+  .invoice-printable .bg-orange-50 {
+    background-color: #fff7ed !important;
+  }
+  
+  .invoice-printable .bg-blue-50 {
+    background-color: #eff6ff !important;
+  }
+  
+  .invoice-printable .bg-gray-50 {
+    background-color: #f9fafb !important;
+  }
+  
+  .invoice-printable .text-white {
+    color: white !important;
+  }
+  
+  .invoice-printable .text-purple-600 {
+    color: #9333ea !important;
+  }
+  
+  .invoice-printable .text-purple-700 {
+    color: #7e22ce !important;
+  }
+  
+  .invoice-printable .text-green-600 {
+    color: #16a34a !important;
+  }
+  
+  .invoice-printable .text-green-700 {
+    color: #15803d !important;
+  }
+  
+  .invoice-printable .text-orange-600 {
+    color: #ea580c !important;
+  }
+  
+  .invoice-printable .text-orange-700 {
+    color: #c2410c !important;
+  }
+  
+  .invoice-printable .text-gray-600 {
+    color: #4b5563 !important;
+  }
+  
+  .invoice-printable .text-gray-700 {
+    color: #374151 !important;
+  }
+  
+  .invoice-printable .text-gray-800 {
+    color: #1f2937 !important;
+  }
+  
+  .invoice-printable .text-gray-900 {
+    color: #111827 !important;
+  }
+  
+  /* No box shadows in print */
+  .invoice-printable,
+  .invoice-printable * {
+    box-shadow: none !important;
+  }
+}
+
+/* Custom Scrollbar Styles */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #9333ea;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #7e22ce;
+}
