@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@media print {
+  .invoice-printable {
+    width: 210mm !important;
+    min-height: 297mm !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .printable-area {
+    background-color: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  body {
+    background-color: white !important;
+  }
+  /* Ensure the invoice takes up the full page */
+  .max-w-\[210mm\] {
+    max-width: 100% !important;
+    box-shadow: none !important;
+  }
+}
