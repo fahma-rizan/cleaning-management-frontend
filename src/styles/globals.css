@@ -539,3 +539,9 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #7e22ce;
 }
+
+/* Logo without gray background - blend mode to remove gray and keep purple */
+.logo-no-bg {
+  mix-blend-mode: multiply;
+  background: white;
+}
