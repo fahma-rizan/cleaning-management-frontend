@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   ClipboardList,
@@ -15,6 +15,9 @@ import {
   Send,
   UserCheck,
   UserX,
+  X,
+  Upload,
+  Save,
 } from "lucide-react";
 import type { User as UserType } from "../types";
 import MaterialUsageForm from "./MaterialUsageForm";
@@ -60,6 +63,85 @@ export default function StaffDashboard({
   const [isAvailable, setIsAvailable] = useState<boolean>(true);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Profile edit modal
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    fullName:        '',
+    phone:           '',
+    address:         '',
+    specializations: [] as string[],
+    nic:             '',
+  });
+  const [photoPreview, setPhotoPreview]   = useState<string | null>(null);
+  const [photoBase64, setPhotoBase64]     = useState<string | null>(null);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError]   = useState('');
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const SPECS = ['Home Cleaning', 'Laundry Service', 'Sofa/Mattress Cleaning', 'Curtain Cleaning'];
+
+  const openProfileModal = async () => {
+    try {
+      const data = await fetchWithAuth('/staff/me');
+      if (data.success) {
+        const s = data.staff;
+        setProfileForm({
+          fullName:        s.name        || user.name || '',
+          phone:           s.phone       || '',
+          address:         s.address     || '',
+          specializations: s.specializations || [],
+          nic:             s.nic         || '',
+        });
+        setPhotoPreview(s.profilePhoto || user.image || null);
+        setPhotoBase64(null);
+      }
+    } catch {
+      setProfileForm({ fullName: user.name || '', phone: '', address: '', specializations: [], nic: '' });
+    }
+    setProfileError('');
+    setShowProfileModal(true);
+  };
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setPhotoPreview(result);
+      setPhotoBase64(result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const saveProfile = async () => {
+    if (!profileForm.fullName.trim()) { setProfileError('Full name is required.'); return; }
+    setProfileSaving(true);
+    setProfileError('');
+    try {
+      const payload: any = {
+        fullName:        profileForm.fullName,
+        phone:           profileForm.phone,
+        address:         profileForm.address,
+        specializations: profileForm.specializations,
+      };
+      if (photoBase64) payload.profilePhoto = photoBase64;
+
+      const data = await fetchWithAuth('/staff/profile', {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+      if (data.success) {
+        setShowProfileModal(false);
+      } else {
+        setProfileError(data.message || 'Update failed.');
+      }
+    } catch {
+      setProfileError('Network error. Please try again.');
+    }
+    setProfileSaving(false);
+  };
 
   const fetchBookings = async (showLoader = false) => {
     if (showLoader) setLoading(true);
@@ -322,6 +404,22 @@ export default function StaffDashboard({
                 <p className="font-semibold text-gray-800">{user.name}</p>
                 <p className="text-sm text-gray-500">{user.email}</p>
               </div>
+
+              {/* Profile avatar — click to edit profile */}
+              <button
+                onClick={openProfileModal}
+                title="Edit Profile"
+                className="w-10 h-10 rounded-full overflow-hidden border-2 border-purple-300 shrink-0 bg-purple-100 flex items-center justify-center hover:border-purple-500 transition-colors"
+              >
+                {photoPreview || user.image ? (
+                  <img src={photoPreview || user.image} alt={user.name} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-purple-700 font-bold text-sm">
+                    {user.name.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()}
+                  </span>
+                )}
+              </button>
+
               <button
                 onClick={onLogout}
                 className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
@@ -665,17 +763,16 @@ export default function StaffDashboard({
             Quick Actions
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <button
-              type="button"
-              onClick={() => setActiveTab("tasks")}
-              className="flex items-center gap-3 p-4 border-2 border-purple-200 rounded-lg hover:bg-purple-50 transition-colors text-left"
+            <Link
+              to="/gps-tracking"
+              className="flex items-center gap-3 p-4 border-2 border-purple-200 rounded-lg hover:bg-purple-50 transition-colors"
             >
               <MapPin className="w-6 h-6 text-purple-600" />
               <div>
                 <p className="font-semibold text-gray-800">GPS Tracking</p>
                 <p className="text-sm text-gray-600">Track service locations</p>
               </div>
-            </button>
+            </Link>
             <Link
               to="/performance"
               className="flex items-center gap-3 p-4 border-2 border-purple-200 rounded-lg hover:bg-purple-50 transition-colors"
@@ -739,6 +836,157 @@ export default function StaffDashboard({
           taskService={selectedTaskForMaterial.service}
           customerName={selectedTaskForMaterial.customer}
         />
+      )}
+
+      {/* ── Edit Profile Modal ─────────────────────────────────────────────── */}
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-xl font-bold text-gray-900">Edit your Profile</h2>
+              <button onClick={() => setShowProfileModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-5">
+              {/* Photo upload */}
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-purple-200 bg-purple-50 flex items-center justify-center">
+                  {photoPreview ? (
+                    <img src={photoPreview} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-purple-600 font-bold text-2xl">
+                      {profileForm.fullName.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase() || <User className="w-10 h-10" />}
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  className="flex items-center gap-2 text-sm text-purple-600 hover:text-purple-800 font-medium"
+                >
+                  <Upload className="w-4 h-4" />
+                  {photoPreview ? 'Change Photo' : 'Upload Photo'}
+                </button>
+                <span className="text-xs text-gray-400">(Optional)</span>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoChange}
+                />
+              </div>
+
+              {/* Full Name */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Full Name <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={profileForm.fullName}
+                  onChange={e => setProfileForm(p => ({ ...p, fullName: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="Enter full name"
+                />
+              </div>
+
+              {/* Email (read-only) */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Email Address</label>
+                <input
+                  type="email"
+                  value={user.email}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
+                />
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Phone Number</label>
+                <input
+                  type="text"
+                  value={profileForm.phone}
+                  onChange={e => setProfileForm(p => ({ ...p, phone: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="Enter phone number"
+                />
+              </div>
+
+              {/* NIC (read-only) */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">NIC Number</label>
+                <input
+                  type="text"
+                  value={profileForm.nic || '—'}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
+                />
+              </div>
+
+              {/* Address */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Address <span className="text-gray-400 font-normal">(Optional)</span></label>
+                <input
+                  type="text"
+                  value={profileForm.address}
+                  onChange={e => setProfileForm(p => ({ ...p, address: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="Enter home address"
+                />
+              </div>
+
+              {/* Specializations */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Specializations</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {SPECS.map(spec => (
+                    <label key={spec} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={profileForm.specializations.includes(spec)}
+                        onChange={() =>
+                          setProfileForm(p => ({
+                            ...p,
+                            specializations: p.specializations.includes(spec)
+                              ? p.specializations.filter(s => s !== spec)
+                              : [...p.specializations, spec],
+                          }))
+                        }
+                        className="accent-purple-600"
+                      />
+                      <span className="text-sm text-gray-700">{spec}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {profileError && (
+                <p className="text-sm text-red-600 font-medium">{profileError}</p>
+              )}
+            </div>
+
+            {/* Footer buttons */}
+            <div className="flex gap-3 px-6 pb-6">
+              <button
+                onClick={saveProfile}
+                disabled={profileSaving}
+                className="flex-1 flex items-center justify-center gap-2 bg-purple-600 text-white py-2.5 rounded-xl font-semibold hover:bg-purple-700 disabled:opacity-50 transition-colors"
+              >
+                <Save className="w-4 h-4" />
+                {profileSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button
+                onClick={() => setShowProfileModal(false)}
+                className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

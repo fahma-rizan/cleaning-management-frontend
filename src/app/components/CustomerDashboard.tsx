@@ -81,7 +81,6 @@ export default function CustomerDashboard({
   const sidebarItems = [
     { id: "overview", name: "Overview", icon: LayoutDashboard },
     { id: "bookings", name: "My Bookings", icon: ClipboardList },
-    { id: "loyalty", name: "Loyalty Points", icon: Award },
     { id: "notifications", name: "Notifications", icon: Bell },
   ];
 

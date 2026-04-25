@@ -8,6 +8,7 @@ export interface User {
   loyaltyPoints?: number;
   badge?: 'Silver' | 'Gold' | 'Platinum';
   requiresPasswordChange?: boolean;
+  image?: string;
 }
 
 export interface Booking {
