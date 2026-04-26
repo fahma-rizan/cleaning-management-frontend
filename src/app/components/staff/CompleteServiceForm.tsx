@@ -161,12 +161,20 @@ export default function CompleteServiceForm() {
     setTimeout(() => {
       setIsSubmitting(false);
       if (status === 'submitted') {
-        navigate('/staff/submission-success', { 
-          state: { 
+        // Mark this booking as having material usage submitted
+        if (bookingId) {
+          const existing: string[] = JSON.parse(localStorage.getItem('submittedMaterialUsage') || '[]');
+          if (!existing.includes(bookingId)) {
+            existing.push(bookingId);
+            localStorage.setItem('submittedMaterialUsage', JSON.stringify(existing));
+          }
+        }
+        navigate('/staff/submission-success', {
+          state: {
             id: serviceId.replace('CL-', '#SUB-'),
             serviceType: serviceType,
             date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-          } 
+          }
         });
       } else {
         alert('Draft saved successfully!');

@@ -76,6 +76,13 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
     '14': 'Carpet Cleaning',
   };
   
+  const parseLocalDate = (str: string) => {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+  const toLocalDateStr = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
   const [bookingData, setBookingData] = useState({
     date: '',
     time: '',
@@ -307,8 +314,8 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                     <div>
                       <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Service Date</label>
                       <DatePicker
-                        selected={bookingData.date ? new Date(bookingData.date) : null}
-                        onChange={(date) => handleInputChange('date', date ? date.toISOString().split('T')[0] : '')}
+                        selected={bookingData.date ? parseLocalDate(bookingData.date) : null}
+                        onChange={(date: Date | null) => handleInputChange('date', date ? toLocalDateStr(date) : '')}
                         minDate={new Date()}
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                         placeholderText="Select date"
@@ -423,8 +430,8 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                     <div>
                       <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup Date</label>
                       <DatePicker
-                        selected={bookingData.date ? new Date(bookingData.date) : null}
-                        onChange={(date) => handleInputChange('date', date ? date.toISOString().split('T')[0] : '')}
+                        selected={bookingData.date ? parseLocalDate(bookingData.date) : null}
+                        onChange={(date: Date | null) => handleInputChange('date', date ? toLocalDateStr(date) : '')}
                         minDate={new Date()}
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                         placeholderText="Select date"
@@ -515,8 +522,8 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                     <div>
                       <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup Date</label>
                       <DatePicker
-                        selected={bookingData.date ? new Date(bookingData.date) : null}
-                        onChange={(date) => handleInputChange('date', date ? date.toISOString().split('T')[0] : '')}
+                        selected={bookingData.date ? parseLocalDate(bookingData.date) : null}
+                        onChange={(date: Date | null) => handleInputChange('date', date ? toLocalDateStr(date) : '')}
                         minDate={new Date()}
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                         placeholderText="Select date"
@@ -607,8 +614,8 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                     <div>
                       <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup Date</label>
                       <DatePicker
-                        selected={bookingData.date ? new Date(bookingData.date) : null}
-                        onChange={(date) => handleInputChange('date', date ? date.toISOString().split('T')[0] : '')}
+                        selected={bookingData.date ? parseLocalDate(bookingData.date) : null}
+                        onChange={(date: Date | null) => handleInputChange('date', date ? toLocalDateStr(date) : '')}
                         minDate={new Date()}
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                         placeholderText="Select date"
@@ -699,8 +706,8 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                     <div>
                       <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup Date</label>
                       <DatePicker
-                        selected={bookingData.date ? new Date(bookingData.date) : null}
-                        onChange={(date) => handleInputChange('date', date ? date.toISOString().split('T')[0] : '')}
+                        selected={bookingData.date ? parseLocalDate(bookingData.date) : null}
+                        onChange={(date: Date | null) => handleInputChange('date', date ? toLocalDateStr(date) : '')}
                         minDate={new Date()}
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                         placeholderText="Select date"
@@ -836,8 +843,8 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                     <div>
                       <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Service Date</label>
                       <DatePicker
-                        selected={bookingData.date ? new Date(bookingData.date) : null}
-                        onChange={(date) => handleInputChange('date', date ? date.toISOString().split('T')[0] : '')}
+                        selected={bookingData.date ? parseLocalDate(bookingData.date) : null}
+                        onChange={(date: Date | null) => handleInputChange('date', date ? toLocalDateStr(date) : '')}
                         minDate={new Date()}
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                         placeholderText="Select date"
@@ -981,8 +988,8 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                     <div>
                       <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Service Date</label>
                       <DatePicker
-                        selected={bookingData.date ? new Date(bookingData.date) : null}
-                        onChange={(date) => handleInputChange('date', date ? date.toISOString().split('T')[0] : '')}
+                        selected={bookingData.date ? parseLocalDate(bookingData.date) : null}
+                        onChange={(date: Date | null) => handleInputChange('date', date ? toLocalDateStr(date) : '')}
                         minDate={new Date()}
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                         placeholderText="Select date"

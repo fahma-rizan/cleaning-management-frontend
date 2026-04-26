@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import type { User as UserType } from "../types";
 import MaterialUsageForm from "./MaterialUsageForm";
+import InvoiceGenerator from "./InvoiceGenerator";
+import type { InvoiceData } from "./InvoiceGenerator";
 import { fetchWithAuth } from "../utils/api";
 
 interface StaffDashboardProps {
@@ -41,6 +43,7 @@ interface Booking {
   id: string;
   bookingId?: string;
   customer: string;
+  customerEmail: string;
   service: string;
   date: string;
   time: string;
@@ -56,13 +59,16 @@ interface Booking {
 export default function StaffDashboard({
   user,
   onLogout,
-  theme,
-  onToggleTheme,
+  theme: _theme,
+  onToggleTheme: _onToggleTheme,
 }: StaffDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"tasks" | "schedule">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "schedule" | "completed">("tasks");
   const [isAvailable, setIsAvailable] = useState<boolean>(true);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submittedMaterialIds, setSubmittedMaterialIds] = useState<Set<string>>(
+    new Set(JSON.parse(localStorage.getItem('submittedMaterialUsage') || '[]'))
+  );
 
   // Profile edit modal
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -164,6 +170,17 @@ export default function StaffDashboard({
     return () => clearInterval(interval);
   }, []);
 
+  // Re-read submitted material IDs when the tab regains focus (staff returns from CompleteServiceForm)
+  useEffect(() => {
+    const refresh = () => {
+      setSubmittedMaterialIds(
+        new Set(JSON.parse(localStorage.getItem('submittedMaterialUsage') || '[]'))
+      );
+    };
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, []);
+
   // Decline task modal state
   const [showDeclineModal, setShowDeclineModal] = useState(false);
   const [selectedTaskToDecline, setSelectedTaskToDecline] =
@@ -174,6 +191,47 @@ export default function StaffDashboard({
   const [showMaterialForm, setShowMaterialForm] = useState(false);
   const [selectedTaskForMaterial, setSelectedTaskForMaterial] =
     useState<Booking | null>(null);
+
+  // Invoice modal state
+  const [invoiceModalData, setInvoiceModalData] = useState<InvoiceData | null>(null);
+  const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null);
+
+  const buildInvoiceData = (booking: Booking): InvoiceData => {
+    const now       = new Date();
+    const dateStr   = now.toISOString().split('T')[0].replace(/-/g, '');
+    const code      = booking.service.substring(0, 3).toUpperCase();
+    const rand      = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+    const total     = booking.amount;
+    const paid      = booking.paymentMethod === 'cod' ? 0 : total;
+    const balance   = total - paid;
+    const status: InvoiceData['status'] = balance === 0 ? 'paid' : paid > 0 ? 'partial' : 'pending';
+    return {
+      invoiceNumber: `INV-${code}-${dateStr}-${rand}`,
+      invoiceType:   booking.paymentMethod === 'cod' ? 'cod' : 'full',
+      date:          now.toLocaleDateString(),
+      time:          now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      bookingId:     booking.bookingId || booking._id,
+      customer: {
+        name:    booking.customer,
+        email:   booking.customerEmail || '—',
+        phone:   '—',
+        address: booking.address,
+      },
+      service: {
+        name: booking.service,
+        date: booking.date,
+        time: booking.time,
+      },
+      pricing: {
+        basePrice:    total,
+        total,
+        paidAmount:   paid,
+        balanceAmount: balance,
+      },
+      paymentMethod: booking.paymentMethod === 'cod' ? 'Cash on Delivery' : 'Online Payment',
+      status,
+    };
+  };
 
   // Handle material usage submission (localStorage — not in this workload scope)
   const handleMaterialUsageSubmit = (usedItems: any[], notes: string) => {
@@ -528,6 +586,24 @@ export default function StaffDashboard({
                   Schedule
                 </div>
               </button>
+              <button
+                onClick={() => setActiveTab("completed")}
+                className={`py-4 px-2 border-b-2 font-medium transition-colors ${
+                  activeTab === "completed"
+                    ? "border-purple-600 text-purple-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5" />
+                  Completed Tasks
+                  {bookings.filter(b => b.status === "completed").length > 0 && (
+                    <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                      {bookings.filter(b => b.status === "completed").length}
+                    </span>
+                  )}
+                </div>
+              </button>
             </div>
           </div>
 
@@ -669,13 +745,20 @@ export default function StaffDashboard({
                               <span className="px-4 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium">
                                 ✓ Task Completed
                               </span>
-                              <Link
-                                to={`/staff/complete-service/${booking._id}`}
-                                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-2"
-                              >
-                                <Package className="w-4 h-4" />
-                                Record Material Usage
-                              </Link>
+                              {submittedMaterialIds.has(booking._id) ? (
+                                <span className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium flex items-center gap-2">
+                                  <Package className="w-4 h-4" />
+                                  ✓ Submitted Material Usage
+                                </span>
+                              ) : (
+                                <Link
+                                  to={`/staff/complete-service/${booking._id}`}
+                                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-2"
+                                >
+                                  <Package className="w-4 h-4" />
+                                  Record Material Usage
+                                </Link>
+                              )}
                             </>
                           )}
 
@@ -696,22 +779,36 @@ export default function StaffDashboard({
                               </span>
                             )}
 
-                          {/* Invoice buttons (UI only) */}
+                          {/* Invoice buttons */}
                           <button
                             type="button"
-                            onClick={() => setActiveTab("tasks")}
-                            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm flex items-center gap-2"
+                            onClick={() => setInvoiceModalData(buildInvoiceData(booking))}
+                            className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm flex items-center gap-2"
                           >
                             <FileText className="w-4 h-4" />
                             Generate Invoice
                           </button>
                           <button
                             type="button"
-                            onClick={() => setActiveTab("tasks")}
-                            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm flex items-center gap-2"
+                            disabled={sendingInvoiceId === booking._id}
+                            onClick={async () => {
+                              setSendingInvoiceId(booking._id);
+                              try {
+                                const result = await fetchWithAuth(`/bookings/${booking._id}/send-invoice`, { method: 'POST' });
+                                if (result.success) {
+                                  alert(`✅ ${result.message}`);
+                                } else {
+                                  alert(`❌ ${result.message}`);
+                                }
+                              } catch {
+                                alert('❌ Failed to send invoice. Please try again.');
+                              }
+                              setSendingInvoiceId(null);
+                            }}
+                            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors text-sm flex items-center gap-2"
                           >
                             <Send className="w-4 h-4" />
-                            Send Invoice
+                            {sendingInvoiceId === booking._id ? 'Sending…' : 'Send Invoice'}
                           </button>
                         </div>
                       </div>
@@ -754,6 +851,54 @@ export default function StaffDashboard({
                 )}
               </div>
             )}
+
+            {activeTab === "completed" && (() => {
+              const completedBookings = bookings.filter(b => b.status === "completed");
+              return (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-semibold text-gray-800">Completed Tasks</h3>
+                    <span className="text-sm text-gray-500">{completedBookings.length} task{completedBookings.length !== 1 ? 's' : ''} completed</span>
+                  </div>
+                  {completedBookings.length === 0 ? (
+                    <div className="text-center py-12">
+                      <CheckCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-500">No completed tasks yet.</p>
+                    </div>
+                  ) : (
+                    completedBookings.map(booking => (
+                      <div key={booking._id} className="border border-green-200 bg-green-50 rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-gray-800 text-lg">{booking.service}</h4>
+                            <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
+                              <User className="w-4 h-4" />
+                              {booking.customer}
+                            </div>
+                          </div>
+                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            COMPLETED
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Calendar className="w-4 h-4" />
+                            {booking.date} at {booking.time}
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <MapPin className="w-4 h-4" />
+                            {booking.address}
+                          </div>
+                        </div>
+                        <div className="pt-3 border-t border-green-200">
+                          <span className="text-lg font-bold text-purple-600">LKR {booking.amount.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
 
@@ -836,6 +981,24 @@ export default function StaffDashboard({
           taskService={selectedTaskForMaterial.service}
           customerName={selectedTaskForMaterial.customer}
         />
+      )}
+
+      {/* ── Invoice Preview Modal ─────────────────────────────────────────── */}
+      {invoiceModalData && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50 p-4 overflow-y-auto">
+          <div className="w-full max-w-[230mm] mt-4 mb-8">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-white font-bold text-lg">Invoice Preview</h2>
+              <button
+                onClick={() => setInvoiceModalData(null)}
+                className="text-white bg-white/20 hover:bg-white/30 rounded-lg p-2 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <InvoiceGenerator invoice={invoiceModalData} theme="light" />
+          </div>
+        </div>
       )}
 
       {/* ── Edit Profile Modal ─────────────────────────────────────────────── */}
