@@ -196,6 +196,13 @@ export default function StaffDashboard({
   const [invoiceModalData, setInvoiceModalData] = useState<InvoiceData | null>(null);
   const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null);
 
+  // A completed task is fully done (ready to leave My Tasks) when:
+  // material usage submitted + cash received (COD only, otherwise not required)
+  const isTaskDone = (b: Booking) =>
+    b.status === "completed" &&
+    submittedMaterialIds.has(b._id) &&
+    (b.paymentMethod !== "cod" || b.cashReceived);
+
   const buildInvoiceData = (booking: Booking): InvoiceData => {
     const now       = new Date();
     const dateStr   = now.toISOString().split('T')[0].replace(/-/g, '');
@@ -597,9 +604,9 @@ export default function StaffDashboard({
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-5 h-5" />
                   Completed Tasks
-                  {bookings.filter(b => b.status === "completed").length > 0 && (
+                  {bookings.filter(isTaskDone).length > 0 && (
                     <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                      {bookings.filter(b => b.status === "completed").length}
+                      {bookings.filter(isTaskDone).length}
                     </span>
                   )}
                 </div>
@@ -616,10 +623,10 @@ export default function StaffDashboard({
                 </h3>
                 {loading ? (
                   <p className="text-center text-gray-500 py-8">Loading tasks...</p>
-                ) : bookings.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">No tasks assigned yet.</p>
+                ) : bookings.filter(b => !isTaskDone(b)).length === 0 ? (
+                  <p className="text-center text-gray-500 py-8">No active tasks assigned.</p>
                 ) : (
-                  bookings.map((booking) => (
+                  bookings.filter(b => !isTaskDone(b)).map((booking) => (
                     <div
                       key={booking._id}
                       className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
@@ -853,7 +860,10 @@ export default function StaffDashboard({
             )}
 
             {activeTab === "completed" && (() => {
-              const completedBookings = bookings.filter(b => b.status === "completed");
+              const completedBookings = bookings
+                .filter(isTaskDone)
+                .slice()
+                .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
               return (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between mb-4">
@@ -890,8 +900,36 @@ export default function StaffDashboard({
                             {booking.address}
                           </div>
                         </div>
-                        <div className="pt-3 border-t border-green-200">
+                        <div className="flex justify-between items-center pt-3 border-t border-green-200">
                           <span className="text-lg font-bold text-purple-600">LKR {booking.amount.toLocaleString()}</span>
+                          <div className="flex gap-2 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => setInvoiceModalData(buildInvoiceData(booking))}
+                              className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm flex items-center gap-2"
+                            >
+                              <FileText className="w-4 h-4" />
+                              Generate Invoice
+                            </button>
+                            <button
+                              type="button"
+                              disabled={sendingInvoiceId === booking._id}
+                              onClick={async () => {
+                                setSendingInvoiceId(booking._id);
+                                try {
+                                  const result = await fetchWithAuth(`/bookings/${booking._id}/send-invoice`, { method: 'POST' });
+                                  alert(result.success ? `✅ ${result.message}` : `❌ ${result.message}`);
+                                } catch {
+                                  alert('❌ Failed to send invoice.');
+                                }
+                                setSendingInvoiceId(null);
+                              }}
+                              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors text-sm flex items-center gap-2"
+                            >
+                              <Send className="w-4 h-4" />
+                              {sendingInvoiceId === booking._id ? 'Sending…' : 'Send Invoice'}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))
