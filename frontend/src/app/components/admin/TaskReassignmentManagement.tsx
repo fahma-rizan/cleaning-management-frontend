@@ -96,14 +96,17 @@ export function TaskReassignmentManagement() {
             <h2 className="text-2xl font-bold text-gray-900">Task Reassignment Management</h2>
             <p className="text-sm text-gray-600 mt-1">Monitor declined tasks and automatic reassignments</p>
           </div>
-          <div className="relative">
+          <button
+            onClick={() => setActiveView('notifications')}
+            className="relative cursor-pointer"
+          >
             <Bell className="w-8 h-8 text-purple-600" />
             {unreadCount > 0 && (
               <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
                 {unreadCount}
               </span>
             )}
-          </div>
+          </button>
         </div>
 
         {/* View Tabs */}

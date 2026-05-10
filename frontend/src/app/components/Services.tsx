@@ -330,6 +330,8 @@ export default function Services({ user, onLogout, theme = 'light', onToggleThem
                       >
                         View Details
                       </Link>
+
+                      {/*book now button*/}
                       <Link
                         to={user ? `/booking/${service.id}` : `/login?redirect=/booking/${service.id}`}
                         className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors text-center"

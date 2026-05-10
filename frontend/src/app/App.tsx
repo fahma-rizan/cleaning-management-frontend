@@ -11,11 +11,11 @@ import type { User } from "./types";
 import { AppContext, useApp } from "./context";
 
 // Components
-import HomePage from "./components/HomePage";
+import HomePage from "./components/HomePage"; //landing page
 import RoleSelection from "./components/RoleSelection";
 import RegisterAdmin from "./components/RegisterAdmin";
 import RefinedRegister from "./components/auth/RefinedRegister";
-import RefinedOTPVerify from "./components/auth/RefinedOTPVerify";
+import RefinedOTPVerify from "./components/auth/RefinedOTPVerify"; 
 import RefinedLogin from "./components/auth/RefinedLogin";
 import RefinedForgotPassword from "./components/auth/RefinedForgotPassword";
 import RefinedVerifyResetCode from "./components/auth/RefinedVerifyResetCode";
@@ -24,13 +24,13 @@ import StaffFirstLogin from "./components/auth/StaffFirstLogin";
 import RefinedChangePassword from "./components/auth/RefinedChangePassword";
 import ChangePassword from "./components/auth/ChangePassword";
 import RefinedSuccess from "./components/auth/RefinedSuccess";
-import StaffApplication from "./components/auth/StaffApplication";
+import StaffApplication from "./components/auth/StaffApplication"; 
 import Services from "./components/Services";
 import ServiceDetails from "./components/ServiceDetails";
-import Booking from "./components/Booking";
-import CustomerDashboard from "./components/CustomerDashboard";
+import Booking from "./components/Booking"; //booking page
+import CustomerDashboard from "./components/CustomerDashboard"; // customer dashboard page
 import AdminDashboard from "./components/AdminDashboard";
-import StaffDashboard from "./components/StaffDashboard";
+import StaffDashboard from "./components/StaffDashboard"; //staffdashboard page
 import PaymentPage from "./components/PaymentPage";
 import PaymentGatewayPage from "./components/PaymentGatewayPage";
 import PaymentSuccessPage from "./components/PaymentSuccessPage";
@@ -43,10 +43,10 @@ import SecuritySettings from "./components/SecuritySettings";
 import LoyaltyPage from "./components/LoyaltyPage";
 import LoyaltyPointsSystem from "./components/loyalty/LoyaltyPointsSystem";
 import VerificationSuccess from "./components/VerificationSuccess";
-import StaffPerformance from "./components/StaffPerformance";
-import GPSTracking from "./components/GPSTracking";
-import CompleteServiceForm from "./components/staff/CompleteServiceForm";
-import SubmissionSuccess from "./components/staff/SubmissionSuccess";
+import StaffPerformance from "./components/StaffPerformance"; //staff performance page
+import GPSTracking from "./components/GPSTracking"; //gps tracking page
+import CompleteServiceForm from "./components/staff/CompleteServiceForm"; //staff complete service form page
+import SubmissionSuccess from "./components/staff/SubmissionSuccess"; //staff submission success page
 import LoyaltyPointsSummary from "./components/LoyaltyPointsSummary";
 import CompleteProfile from "./components/auth/CompleteProfile";
 import ComplaintForm from "./components/ComplaintForm";
@@ -115,6 +115,7 @@ export default function App() {
       }}
     >
       <Toaster richColors position="top-right" />
+
       <Router>
         <Routes>
           <Route element={<AppLayout />}>
@@ -157,6 +158,7 @@ export default function App() {
                 )
               }
             />
+            
             <Route path="register" element={<RefinedRegister />} />
             <Route path="role-selection" element={<RoleSelection />} />
             <Route path="register/customer" element={<RefinedRegister />} />

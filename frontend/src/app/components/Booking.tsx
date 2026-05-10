@@ -125,6 +125,7 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
   
   const [estimatedPrice, setEstimatedPrice] = useState(0);
   const [slotCounts, setSlotCounts] = useState<Record<string, number>>({});
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const fetchSlotCounts = async (date: string) => {
     if (!date) return;
@@ -230,8 +231,23 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
     });
   };
 
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (!bookingData.date) errors.date = 'Please select a service date.';
+    if (!bookingData.time) errors.time = 'Please select a time slot.';
+    if (!bookingData.address.trim() || bookingData.address.trim().length < 5)
+      errors.address = 'Please enter a full address (at least 5 characters).';
+    if (isLaundryService && bookingData.laundryServices.length === 0)
+      errors.laundryServices = 'Please select at least one laundry service.';
+    if ((isDryCleaningService || isWashingPressingService || isPressingOnlyService) && estimatedPrice === 0)
+      errors.items = 'Please select at least one item from the price list.';
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (!validateForm()) return;
     const serviceType = serviceMapping[serviceId || '1'] || 'home cleaning';
     const mainServiceType = mainServiceTypeMapping[serviceId || '1'] || 'Home/Office Cleaning';
     const serviceCategory = serviceCategoryMapping[serviceId || '1'] || 'General Cleaning';
@@ -1030,6 +1046,16 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
 
             {/* Price Summary & Submit */}
             <div className="bg-gray-900 dark:bg-purple-900 rounded-3xl p-8 text-white shadow-xl">
+              {Object.keys(formErrors).length > 0 && (
+                <div className="mb-6 p-4 bg-red-900/40 border border-red-500 rounded-2xl">
+                  <p className="text-red-300 font-bold text-sm mb-2">Please fill in all required fields:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    {Object.values(formErrors).map((err, i) => (
+                      <li key={i} className="text-red-300 text-sm">{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                 <div>
                   <h3 className="text-purple-300 font-bold uppercase tracking-widest text-xs mb-1">Estimated Total</h3>

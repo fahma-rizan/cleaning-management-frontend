@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UserCheck, UserX, Bell, Send, AlertTriangle, CheckCircle, X, Clock, RefreshCw } from 'lucide-react';
+import { UserCheck, UserX, Send, AlertTriangle, CheckCircle, X, Clock, RefreshCw } from 'lucide-react';
 import { fetchWithAuth } from '../../utils/api';
 import { toast } from 'sonner';
 
@@ -215,12 +215,9 @@ export function StaffAvailabilityManagement() {
             <h2 className="text-2xl font-bold text-gray-900">Staff Availability Management</h2>
             <p className="text-sm text-gray-600 mt-1">Monitor staff availability</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => { loadData(); loadAttentionBookings(); }} className="text-purple-600 hover:text-purple-800">
-              <RefreshCw className="w-5 h-5" />
-            </button>
-            <Bell className="w-8 h-8 text-purple-600" />
-          </div>
+          <button onClick={() => { loadData(); loadAttentionBookings(); }} className="text-purple-600 hover:text-purple-800">
+            <RefreshCw className="w-5 h-5" />
+          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">

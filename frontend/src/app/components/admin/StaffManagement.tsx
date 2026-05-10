@@ -58,7 +58,7 @@ export function StaffManagement() {
     photo:          null as File | null,
   });
 
-  // ── Load staff from backend ────────────────────────────────────────────────
+  // ── Load staff from backend ────────────────────────────────────
   const loadStaff = async () => {
     setLoadingList(true);
     try {
@@ -72,7 +72,7 @@ export function StaffManagement() {
 
   useEffect(() => { loadStaff(); }, []);
 
-  // ── Form helpers ───────────────────────────────────────────────────────────
+  // ── Form helpers ───────────────────────────────────
   const toggleSpecification = (spec: string) => {
     setFormData(prev => ({
       ...prev,
@@ -141,9 +141,8 @@ export function StaffManagement() {
     s.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // ════════════════════════════════════════════════════════════════════════════
+
   // ADD STAFF FORM VIEW
-  // ════════════════════════════════════════════════════════════════════════════
   if (view === 'add') {
     return (
       <div className="max-w-4xl mx-auto bg-white rounded-3xl p-8 shadow-sm border border-gray-100">

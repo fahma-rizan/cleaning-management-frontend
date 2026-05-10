@@ -501,6 +501,7 @@ export default function CustomerDashboard({
               </div>
             ))}
 
+          {/*upcoming*/}
           {bookingTab === "upcoming" &&
             (upcomingBookings.length > 0 ? (
               <div className="space-y-6">
@@ -529,6 +530,8 @@ export default function CustomerDashboard({
                 <p className="text-gray-500 dark:text-gray-400 mb-6">
                   You don't have any upcoming bookings at the moment.
                 </p>
+
+                {/* book a service button */}
                 <Link
                   to="/services"
                   className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-bold transition-all"

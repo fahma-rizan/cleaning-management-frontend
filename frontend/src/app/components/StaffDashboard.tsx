@@ -314,10 +314,10 @@ export default function StaffDashboard({
       );
 
       if (result.success) {
-        setBookings(bookings.filter((b) => b._id !== selectedTaskToDecline._id));
         setShowDeclineModal(false);
         setSelectedTaskToDecline(null);
         setDeclineReason("");
+        await fetchBookings(false);
         alert(
           `✅ Task declined and forwarded to admin for reassignment.\n\nAnother available staff member will be assigned automatically.`,
         );
@@ -473,7 +473,7 @@ export default function StaffDashboard({
               {/* Profile avatar — click to edit profile */}
               <button
                 onClick={openProfileModal}
-                title="Edit Profile"
+                title="edit Profile"
                 className="w-10 h-10 rounded-full overflow-hidden border-2 border-purple-300 shrink-0 bg-purple-100 flex items-center justify-center hover:border-purple-500 transition-colors"
               >
                 {photoPreview || user.image ? (
@@ -484,7 +484,8 @@ export default function StaffDashboard({
                   </span>
                 )}
               </button>
-
+              
+              {/*logout button*/}
               <button
                 onClick={onLogout}
                 className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
@@ -528,6 +529,7 @@ export default function StaffDashboard({
                 </p>
               </div>
             </div>
+            {/* toggle availability button */}
             <button
               onClick={handleAvailabilityToggle}
               className={`px-6 py-3 rounded-lg font-semibold transition-all transform hover:scale-105 ${
@@ -711,6 +713,8 @@ export default function StaffDashboard({
                             booking.status === "confirmed-paid" ||
                             booking.status === "confirmed-unpaid") && (
                             <>
+                              
+                              {/* assigned task buttons */}
                               <button
                                 onClick={() =>
                                   updateBookingStatus(booking._id, "in-progress")
@@ -786,7 +790,7 @@ export default function StaffDashboard({
                               </span>
                             )}
 
-                          {/* Invoice buttons */}
+                          {/* assigned task Invoice buttons */}
                           <button
                             type="button"
                             onClick={() => setInvoiceModalData(buildInvoiceData(booking))}
