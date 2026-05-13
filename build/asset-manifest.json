@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/static/css/main.3a04e758.css",
+    "main.js": "/static/js/main.99e19cee.js",
+    "static/media/Gemini_Generated_Image_f8k5uhf8k5uhf8k5.png": "/static/media/Gemini_Generated_Image_f8k5uhf8k5uhf8k5.88cab74c8a6258d98e90.png",
+    "static/media/3FF9CCBC-5AAC-4661-B40B-B0948D3AEC55.jpeg": "/static/media/3FF9CCBC-5AAC-4661-B40B-B0948D3AEC55.7ee4acc15662b6639766.jpeg",
+    "index.html": "/index.html"
+  },
+  "entrypoints": [
+    "static/css/main.3a04e758.css",
+    "static/js/main.99e19cee.js"
+  ]
+}
