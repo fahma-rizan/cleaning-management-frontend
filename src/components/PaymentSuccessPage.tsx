@@ -211,7 +211,11 @@ export default function PaymentSuccessPage({ user }: PaymentSuccessPageProps) {
 
   const InvoiceButton = (
     <button
-      onClick={() => setShowInvoice(true)}
+      onClick={() => {
+        console.log('Invoice data on click:', invoice); // DEBUG
+        setRunConfetti(false); // Stop confetti immediately
+        setShowInvoice(true);
+      }}
       className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 text-base font-medium"
     >
       <FileText className="w-5 h-5" />

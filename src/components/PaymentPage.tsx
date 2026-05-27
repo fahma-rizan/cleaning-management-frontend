@@ -227,7 +227,7 @@ const transformInvoiceForBackend = (invoiceData: InvoiceData, user: User): any =
       const amount = getPaidAmount(method, percentage);
       localStorage.setItem('pendingPaymentMethod', method);
       if (percentage) localStorage.setItem('pendingAdvancePercentage', percentage.toString());
-      navigate('/payment-gateway', { state: { paymentMethod: method, amount, bookingData: booking, advancePercentage: percentage } });
+      navigate('/payment-gateway', { state: { paymentMethod: method, amount, bookingId: booking._id, advancePercentage: percentage } });
     } 
     // For offline payments, we now wait for the user to click the 'Confirm Booking' button.
     // The 'handlePaymentProcessing' function is called by that button's onClick handler.

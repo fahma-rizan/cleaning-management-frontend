@@ -37,6 +37,7 @@ interface Invoice {
   paidAmount: number;
   balanceAmount: number;
   status: string;
+  mainCategories: string[]; // Added for inclusive filtering
   createdAt: string;
   bookingId?: string;
   paymentMethod?: string;
@@ -64,6 +65,7 @@ export default function FinancialDashboard({ user }: FinancialDashboardProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>('today');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
 
   const fetchInvoices = async () => {
     try {
@@ -311,17 +313,30 @@ export default function FinancialDashboard({ user }: FinancialDashboardProps) {
     const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
+    let filtered = invoices;
+
+    // 1. Date Filter
     switch (filter) {
       case 'today':
-        return invoices.filter((inv) => new Date(inv.createdAt) >= startOfDay);
+        filtered = filtered.filter((inv) => new Date(inv.createdAt) >= startOfDay);
+        break;
       case 'week':
-        return invoices.filter((inv) => new Date(inv.createdAt) >= startOfWeek);
+        filtered = filtered.filter((inv) => new Date(inv.createdAt) >= startOfWeek);
+        break;
       case 'month':
-        return invoices.filter((inv) => new Date(inv.createdAt) >= startOfMonth);
-      default:
-        return invoices;
+        filtered = filtered.filter((inv) => new Date(inv.createdAt) >= startOfMonth);
+        break;
     }
-  }, [invoices, filter]);
+
+    // 2. Category Filter (Inclusive)
+    if (categoryFilter !== 'ALL') {
+      filtered = filtered.filter((inv) => 
+        inv.mainCategories && inv.mainCategories.includes(categoryFilter)
+      );
+    }
+
+    return filtered;
+  }, [invoices, filter, categoryFilter]);
 
   const metrics = useMemo(() => {
     const totalInvoices = filteredInvoices.length;
@@ -433,6 +448,32 @@ export default function FinancialDashboard({ user }: FinancialDashboardProps) {
               >
                 This Month
               </button>
+            </div>
+          </div>
+
+          {/* Category Filter */}
+          <div className="flex items-center space-x-4 mb-6">
+            <span className="text-sm font-medium text-gray-700">Filter by Category:</span>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { id: 'ALL', label: 'All Services' },
+                { id: 'LND', label: 'Laundry' },
+                { id: 'CUR', label: 'Curtain Cleaning' },
+                { id: 'SVC', label: 'Shampoo Vacuum' },
+                { id: 'HOC', label: 'Home/Office' },
+              ].map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setCategoryFilter(cat.id)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                    categoryFilter === cat.id
+                      ? 'bg-purple-100 text-purple-700 border-2 border-purple-200'
+                      : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
             </div>
           </div>
 

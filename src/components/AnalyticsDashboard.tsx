@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { toast } from 'sonner';
 import {
   BarChart3,
   LineChart,
@@ -55,6 +56,7 @@ const API_BASE_URL = 'http://localhost:4000/api';
 export default function AnalyticsDashboard({ user }: AnalyticsDashboardProps) {
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
   const [serviceData, setServiceData] = useState<ServiceData[]>([]);
   const [paymentMethodData, setPaymentMethodData] = useState<PaymentMethodData[]>([]);
@@ -75,36 +77,61 @@ export default function AnalyticsDashboard({ user }: AnalyticsDashboardProps) {
 
   const fetchAnalyticsData = async () => {
     setLoading(true);
+    setError(null);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      toast.error('The request timed out. Please try again later.');
+    }, 15000); // 15 seconds timeout
+
     try {
+      const { signal } = controller;
       const [revenueRes, servicesRes, paymentsRes, customersRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/analytics/revenue?range=${timeRange}`),
-        fetch(`${API_BASE_URL}/analytics/services?range=${timeRange}`),
-        fetch(`${API_BASE_URL}/analytics/payment-methods?range=${timeRange}`),
-        fetch(`${API_BASE_URL}/analytics/customers?range=${timeRange}`),
+        fetch(`${API_BASE_URL}/analytics/revenue?range=${timeRange}`, { signal }),
+        fetch(`${API_BASE_URL}/analytics/services?range=${timeRange}`, { signal }),
+        fetch(`${API_BASE_URL}/analytics/payment-methods?range=${timeRange}`, { signal }),
+        fetch(`${API_BASE_URL}/analytics/customers?range=${timeRange}`, { signal }),
       ]);
+
+      clearTimeout(timeoutId);
 
       if (revenueRes.ok) {
         const revenue = await revenueRes.json();
         setRevenueData(revenue.data || []);
         setSummaryStats(prev => ({ ...prev, ...revenue.summary }));
+      } else {
+        throw new Error(`Failed to fetch revenue data: ${revenueRes.statusText}`);
       }
 
       if (servicesRes.ok) {
         setServiceData(await servicesRes.json());
+      } else {
+        throw new Error(`Failed to fetch service data: ${servicesRes.statusText}`);
       }
 
       if (paymentsRes.ok) {
         setPaymentMethodData(await paymentsRes.json());
+      } else {
+        throw new Error(`Failed to fetch payment method data: ${paymentsRes.statusText}`);
       }
 
       if (customersRes.ok) {
         setCustomerData(await customersRes.json());
+      } else {
+        throw new Error(`Failed to fetch customer data: ${customersRes.statusText}`);
       }
 
-    } catch (error) {
-      console.error('Error fetching analytics data:', error);
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        setError('The request took too long to complete. Please check your connection and try again.');
+      } else {
+        setError('An error occurred while fetching analytics data. Please try again later.');
+        console.error('Error fetching analytics data:', error);
+        toast.error(error.message || 'An unexpected error occurred.');
+      }
     } finally {
       setLoading(false);
+      clearTimeout(timeoutId);
     }
   };
 
@@ -145,6 +172,26 @@ export default function AnalyticsDashboard({ user }: AnalyticsDashboardProps) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <DemoTopBar user={user} />
+        <div className="text-center p-8 bg-white rounded-lg shadow-md">
+          <XCircle className="w-12 h-12 mx-auto text-red-500 mb-4" />
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">Failed to Load Data</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={fetchAnalyticsData}
+            className="flex items-center justify-center gap-2 px-5 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

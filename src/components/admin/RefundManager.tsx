@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Check, AlertCircle, Loader } from 'lucide-react';
+import { toast } from 'sonner';
 import type { Invoice } from './FinancialDashboard'; // We still use the Invoice type for the nested data
 
 // This new interface represents the data coming from our new `GET /api/refunds` endpoint
@@ -76,9 +77,10 @@ export default function RefundManager({ isOpen, onClose }: RefundManagerProps) {
 
       // Optimistically remove from the list
       setRefunds(prevRefunds => prevRefunds.filter(r => r._id !== refundId));
+      toast.success('Refund approved successfully!');
     } catch (error: any) {
       console.error(`Error approving refund ${refundId}:`, error);
-      // Optionally, set an error state to show in the UI
+      toast.error(error.message || 'An unexpected error occurred.');
     } finally {
       setProcessing(null);
     }
@@ -104,8 +106,10 @@ export default function RefundManager({ isOpen, onClose }: RefundManagerProps) {
       }
 
       setRefunds(prevRefunds => prevRefunds.filter(r => r._id !== refundId));
+      toast.success('Refund denied successfully.');
     } catch (error: any) {
       console.error(`Error denying refund ${refundId}:`, error);
+      toast.error(error.message || 'An unexpected error occurred.');
     } finally {
       setProcessing(null);
     }

@@ -13,5 +13,3 @@
   },
   "include": ["src", "jest.config.js", "__mocks__", "server/emailService.js"]
 }
-
-

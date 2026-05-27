@@ -15,24 +15,37 @@ export default function PaymentFailedPage({ user }: PaymentFailedPageProps) {
     orderId?: string;
     statusCode?: string;
     reason?: string;
+    bookingId?: string; // Add bookingId
+    paymentMethod?: string; // Add paymentMethod
   };
 
   // Send payment failed notification
   useEffect(() => {
-    if (user && failureData?.orderId) {
+    if (user && (failureData?.orderId || failureData?.bookingId)) {
       addNotification({
         userId: user.id,
         type: 'payment-failed',
         title: 'Payment Failed ❌',
-        message: `Your payment for order ${failureData.orderId} was unsuccessful. ${failureData.reason || 'Please try again or contact support.'}`,
-        bookingId: failureData.orderId,
+        message: `Your payment for order ${failureData.orderId || failureData.bookingId} was unsuccessful. ${failureData.reason || 'Please try again or contact support.'}`,
+        bookingId: failureData.orderId || failureData.bookingId,
       });
     }
   }, [user, failureData]);
 
   const handleRetry = () => {
-    // Go back to payment gateway or booking flow
-    navigate(-1);
+    if (failureData?.bookingId) {
+      // If we have the bookingId, we can redirect to the payment gateway
+      navigate(`/payment-gateway/${failureData.bookingId}`, { 
+        replace: true, 
+        state: { 
+          bookingId: failureData.bookingId, 
+          paymentMethod: failureData.paymentMethod 
+        }
+      });
+    } else {
+      // Fallback to previous page if no bookingId is available
+      navigate(-1);
+    }
   };
 
   const handleGoHome = () => {

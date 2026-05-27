@@ -4,13 +4,15 @@ import logoImage from '../assets/61e339fdac995bb65c1169259330f5728c465e0f.png';
 import homeCleaningImage from '../assets/home-cleaning.jpg';
 import curtainCleaningImage from '../assets/curtain-cleaning.jpg';
 import laundryCleaningImage from '../assets/laundry-cleaning.jpg';
-import sofaCleaningImage from '../assets/sofa-cleaning.jpg';
+import shampooVacumImage from '../assets/Shampoo-Vacum.jpg';
+import commonServiceImage from '../assets/common-service.jpg';
 
 
 export type InvoiceType = 'ADVANCE' | 'FINAL' | 'FULL' | 'COD' | 'REFUND' | 'CANCELLATION';
 
 export interface InvoiceData {
   invoiceNumber: string;
+  mainCategories?: string[]; // Added to match backend logic
   invoiceType: InvoiceType;
   date: string;
   time: string;
@@ -25,11 +27,10 @@ export interface InvoiceData {
     name: string;
     date: string;
     time: string;
-    customizations?: Array<{ name: string; price: number; quantity?: number; unit?: string }>;
+    items: Array<{ name: string; price: number; quantity?: number; unit?: string; description?: string }>;
   };
   pricing: {
-    basePrice: number;
-    customizationTotal?: number;
+    subtotal: number;
     discount?: number;
     couponCode?: string;
     taxRate?: number;   // tax percentage e.g. 8 = 8%
@@ -76,83 +77,77 @@ export default function InvoiceGenerator({ invoice, onDownload }: InvoiceGenerat
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-700';
   };
 
-  // Service-specific footer messages
-  const getServiceFooterMessage = (serviceName: string): string => {
-    if (!serviceName) return '-- Excellence In Every Clean --';
-    const name = serviceName.toLowerCase();
-    if (name.includes('sofa') || name.includes('upholstery')) {
-      return '-- Your Sofa Deserves The Best --';
-    } else if (name.includes('mattress')) {
-      return '-- Sleep Better, Live Better --';
-    } else if (name.includes('carpet') || name.includes('rug')) {
-      return '-- Bringing Back The Original Shine --';
-    } else if (name.includes('curtain')) {
-      return '-- Fresh Curtains, Fresh Home --';
-    } else if (name.includes('laundry') || name.includes('wash')) {
-      return '-- Clean Clothes, Happy You --';
-    } else {
-      return '-- Excellence In Every Clean --';
+  // Service-specific footer messages based on categories
+  const getServiceFooterMessage = (categories: string[]): string => {
+    if (!categories || categories.length === 0) return '-- Excellence In Every Clean --';
+    if (categories.length > 1) return '-- Comprehensive Care for Your Home --';
+    
+    const cat = categories[0];
+    switch (cat) {
+      case 'SVC': return '-- Your Upholstery Deserves The Best --';
+      case 'CUR': return '-- Fresh Curtains, Fresh Home --';
+      case 'LND': return '-- Clean Clothes, Happy You --';
+      case 'HOC': return '-- Excellence In Every Clean --';
+      default: return '-- Excellence In Every Clean --';
     }
   };
 
-  // Service-specific terms and conditions
-  const getServiceTerms = (serviceName: string): string[] => {
-    if (!serviceName) return ['Cancellations must be made 24 hours in advance for full refund', 'Quality guarantee - 100% satisfaction or free re-service'];
-    const name = serviceName.toLowerCase();
+  // Service-specific terms and conditions based on categories
+  const getServiceTerms = (categories: string[]): string[] => {
     const commonTerms = [
       'Cancellations must be made 24 hours in advance for full refund',
       'Quality guarantee - 100% satisfaction or free re-service',
       'For queries, contact us at info@cloudlaundry.lk or +94 11 234 5678',
     ];
 
-    let specificTerms: string[] = [];
-    
-    if (name.includes('sofa') || name.includes('upholstery')) {
-      specificTerms = [
+    if (!categories || categories.length === 0) return commonTerms;
+
+    const termsMap: Record<string, string[]> = {
+      SVC: [
         'Deep steam cleaning with eco-friendly detergents',
-        'Fabric protection treatment available upon request',
         'Drying time: 4-6 hours depending on weather conditions',
-      ];
-    } else if (name.includes('mattress')) {
-      specificTerms = [
-        'UV sanitization and dust mite removal included',
-        'Recommended to air mattress for 2-3 hours after service',
-        'Anti-allergen treatment available at additional cost',
-      ];
-    } else if (name.includes('carpet') || name.includes('rug')) {
-      specificTerms = [
-        'Professional hot water extraction method used',
-        'Color restoration and stain removal treatment included',
-        'Avoid walking on carpet for 2-3 hours after cleaning',
-      ];
-    } else if (name.includes('curtain')) {
-      specificTerms = [
+      ],
+      CUR: [
         'Pickup and delivery service included',
         'Dry cleaning for delicate fabrics',
         'Ironing and rehanging service available',
-      ];
-    } else {
-      specificTerms = [
+      ],
+      LND: [
+        'Garments are processed according to care label instructions',
+        'Stain removal is attempted but not guaranteed for old stains',
+      ],
+      HOC: [
         'Payment due upon completion unless advance paid',
-      ];
-    }
+        'Our staff are fully vetted and insured',
+      ],
+    };
 
-    return [...specificTerms, ...commonTerms];
+    let specificTerms: string[] = [];
+    categories.forEach(cat => {
+      if (termsMap[cat]) {
+        specificTerms = [...specificTerms, ...termsMap[cat]];
+      }
+    });
+
+    // Remove duplicates and combine with common terms
+    return [...new Set(specificTerms), ...commonTerms];
   };
 
-  const getServiceImage = (serviceName: string): string => {
-    if (!serviceName) return '';
-    const name = serviceName.toLowerCase();
-    if (name.includes('home')) {
-      return homeCleaningImage;
-    } else if (name.includes('curtain')) {
-      return curtainCleaningImage;
-    } else if (name.includes('laundry')) {
-      return laundryCleaningImage;
-    } else if (name.includes('sofa') || name.includes('mattress')) {
-      return sofaCleaningImage;
-    } else {
-      return ''; // Return empty if no specific image
+  const getServiceImage = (categories: string[]): string => {
+    if (!categories || categories.length === 0) return '';
+    
+    // If multiple categories, show the "MULTI" common image
+    if (categories.length > 1) {
+      return commonServiceImage;
+    }
+
+    const cat = categories[0];
+    switch (cat) {
+      case 'HOC': return homeCleaningImage;
+      case 'CUR': return curtainCleaningImage;
+      case 'LND': return laundryCleaningImage;
+      case 'SVC': return shampooVacumImage;
+      default: return '';
     }
   };
 
@@ -267,16 +262,6 @@ export default function InvoiceGenerator({ invoice, onDownload }: InvoiceGenerat
             </div>
           </div>
 
-          {/* Dynamic Service Image */}
-          {getServiceImage(invoice.service?.name || '') && (
-            <div className="mb-8 flex justify-center">
-              <img 
-                src={getServiceImage(invoice.service?.name || '')} 
-                alt={invoice.service?.name}
-                className="w-40 h-40 object-cover rounded-lg shadow-md"
-              />
-            </div>
-          )}
 
           {/* Service Details */}
           <div className="mb-8">
@@ -292,20 +277,16 @@ export default function InvoiceGenerator({ invoice, onDownload }: InvoiceGenerat
                   </tr>
                 </thead>
                 <tbody className={'bg-white'}>
-                  <tr className="border-b">
-                    <td className="px-4 py-3">{invoice.service?.name || 'Service details not available'}</td>
-                    <td className="px-4 py-3 text-right">{(invoice.pricing?.basePrice || 0).toLocaleString()}</td>
-                    <td className="px-4 py-3 text-center">1</td>
-                    <td className="px-4 py-3 text-right">{(invoice.pricing?.basePrice || 0).toLocaleString()}</td>
-                  </tr>
-                  
-                  {/* Customizations */}
-                  {invoice.service?.customizations && invoice.service.customizations.length > 0 && invoice.service.customizations.map((custom, idx) => (
+                  {/* Service Items */}
+                  {invoice.service?.items && invoice.service.items.map((item, idx) => (
                     <tr key={idx} className="border-b">
-                      <td className="px-4 py-3">{custom.name}</td>
-                      <td className="px-4 py-3 text-right">{custom.price.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-center">{custom.quantity || 1}</td>
-                      <td className="px-4 py-3 text-right">{((custom.quantity || 1) * custom.price).toLocaleString()}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-semibold">{item.name}</div>
+                        {item.description && <div className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">{item.description}</div>}
+                      </td>
+                      <td className="px-4 py-3 text-right">{item.price.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-center">{item.quantity || 1}{item.unit ? ` ${item.unit}` : ''}</td>
+                      <td className="px-4 py-3 text-right">{((item.quantity || 1) * item.price).toLocaleString()}</td>
                     </tr>
                   ))}
                   
@@ -409,13 +390,29 @@ export default function InvoiceGenerator({ invoice, onDownload }: InvoiceGenerat
 
           {/* QR Code and Terms Section */}
           <div className="mt-8 pt-6 border-t border-gray-200 grid grid-cols-3 gap-6 print:mt-6">
-            <div className="col-span-2">
+            <div className="col-span-1">
               <h4 className="text-sm text-gray-600 mb-2 font-semibold">Terms & Conditions:</h4>
               <ul className="text-xs text-gray-500 space-y-1">
-                {getServiceTerms(invoice.service?.name || '').map((term, idx) => (
+                {getServiceTerms(invoice.mainCategories || []).map((term, idx) => (
                   <li key={idx}>• {term}</li>
                 ))}
               </ul>
+            </div>
+
+            {/* Professional Service Badge Placement */}
+            <div className="flex justify-center items-center">
+              {getServiceImage(invoice.mainCategories || []) && (
+                <div className="relative">
+                  <img 
+                    src={getServiceImage(invoice.mainCategories || [])} 
+                    alt="Service Badge"
+                    className="w-24 h-24 object-cover rounded-full border-4 border-purple-50 shadow-sm"
+                  />
+                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap font-bold uppercase tracking-wider">
+                    {invoice.mainCategories?.[0] || 'SERVICE'}
+                  </div>
+                </div>
+              )}
             </div>
             
             <div className="text-center">
@@ -435,7 +432,7 @@ export default function InvoiceGenerator({ invoice, onDownload }: InvoiceGenerat
           <div className="mt-8 pt-6 border-t border-gray-200 text-center text-sm text-gray-500 print:mt-6">
             <p className="font-semibold">Thank you for choosing Cloud Laundry.LK</p>
             <p className="text-xs mt-1">This is a computer-generated invoice and does not require a signature</p>
-            <p className="text-xs mt-1">{getServiceFooterMessage(invoice.service?.name || '')}</p>
+            <p className="text-xs mt-1">{getServiceFooterMessage(invoice.mainCategories || [])}</p>
           </div>
         </div>
       </div>

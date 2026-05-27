@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, AlertCircle, CheckCircle, XCircle, Clock, RefreshCw, ShieldCheck } from 'lucide-react';
+import { toast } from 'sonner';
 import InvoiceGenerator, { InvoiceData } from './InvoiceGenerator';
 import { addNotification } from '../utils/notificationUtils';
 import type { User } from '../types';
@@ -126,7 +127,7 @@ export default function RefundWorkflow({ user }: RefundWorkflowProps) {
       setStage('pending-approval');
     } catch (err: any) {
       console.error("Error submitting refund request:", err);
-      setError(err.message);
+      toast.error(err.message || 'An unexpected error occurred while submitting your request.');
     } finally {
       setProcessing(false);
     }
@@ -230,7 +231,7 @@ export default function RefundWorkflow({ user }: RefundWorkflowProps) {
       setStage('rejected');
     } catch (err: any) {
       console.error("Error rejecting refund:", err);
-      setError(err.message);
+      toast.error(err.message || 'An unexpected error occurred while processing the rejection.');
     } finally {
       setProcessing(false);
     }

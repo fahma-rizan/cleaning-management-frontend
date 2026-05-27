@@ -1,4 +1,5 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
+import { Toaster } from 'sonner';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { socket } from './socket'; // Import the shared socket instance
 
@@ -22,8 +23,10 @@ const BalancePaymentPage = lazy(() => import('./components/BalancePaymentPage'))
 const AnalyticsDashboard = lazy(() => import('./components/AnalyticsDashboard'));
 const ReschedulePage = lazy(() => import('./components/ReschedulePage'));
 const CancelPage = lazy(() => import('./components/CancelPage'));
+const StaffDashboard = lazy(() => import('./components/staff/StaffDashboard'));
 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const DEMO_USER = {
   id: 'user-001',
@@ -69,6 +72,7 @@ const AppContent: React.FC = () => {
 
   return (
     <BrowserRouter>
+      <Toaster richColors position="top-right" />
       <Suspense fallback={
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center">
@@ -79,6 +83,7 @@ const AppContent: React.FC = () => {
       }>
         <Routes>
           <Route path="/"                  element={<Navigate to="/admin/financial-dashboard" replace />} />
+          <Route path="/payment-gateway/:bookingId" element={<PaymentGatewayPage />} />
           <Route path="/payment/:bookingId" element={<PaymentPage user={currentUser} />} />
           <Route path="/payment-gateway"   element={<PaymentGatewayPage user={currentUser} />} />
           <Route path="/payment-success"   element={<PaymentSuccessPage user={currentUser} />} />
@@ -92,11 +97,16 @@ const AppContent: React.FC = () => {
           <Route path="/staff-invoice/:invoiceNumber" element={<StaffInvoiceViewer />} />
           <Route path="/staff/invoice-viewer"         element={<StaffInvoiceViewer />} />
           <Route path="/admin/financial-dashboard"    element={<FinancialDashboard user={currentUser} />} />
-          <Route path="/admin/analytics"               element={<AnalyticsDashboard user={currentUser} />} />
+          <Route path="/admin/analytics"               element={
+            <ErrorBoundary>
+              <AnalyticsDashboard user={currentUser} />
+            </ErrorBoundary>
+          } />
           <Route path="/payment-link"                 element={<PaymentLinkPage user={currentUser} />} />
           <Route path="/balance-payment"              element={<BalancePaymentPage user={currentUser} />} />
           <Route path="/booking/reschedule"           element={<ReschedulePage />} />
           <Route path="/booking/cancel"               element={<CancelPage />} />
+          <Route path="/staff-dashboard"             element={<StaffDashboard />} />
         </Routes>
       </Suspense>
     </BrowserRouter>
