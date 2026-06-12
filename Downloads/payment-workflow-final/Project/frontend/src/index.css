@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   PRINT STYLES — Invoice A4 PDF / Print
+   All rules isolated to @media print so they never affect screen rendering.
+   ───────────────────────────────────────────────────────────────────────────── */
+@media print {
+
+  /* 1. Page setup — A4, zero browser margin (invoice has its own internal padding) */
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  /* 2. Hide EVERYTHING on the page first */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* 3. Then reveal only the invoice and all its children */
+  .invoice-printable,
+  .invoice-printable * {
+    visibility: visible !important;
+  }
+
+  /* 4. Position the invoice at the very top-left of the page */
+  .invoice-printable {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* 5. Force background colours and images to print
+        Without this the purple header and coloured table rows print as white/grey */
+  .invoice-printable {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 6. Page-break rules — prevent mid-content breaks */
+  .invoice-printable table {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .invoice-printable .bank-details-section {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .invoice-printable .footer-section {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .invoice-printable .terms-qr-section {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* 7. Hide the download/print buttons themselves when printing */
+  .invoice-download-btn,
+  .no-print {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* 8. Remove body background */
+  body {
+    background-color: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
