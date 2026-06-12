@@ -13,7 +13,7 @@ import PriceReductionWorkflow from './components/PriceReductionWorkflow';
 
 import AIInvoiceAssistant from './components/AIInvoiceAssistant';
 
-import WorkflowAssistant from './WorkflowAssistant';
+import WorkflowAssistant from './components/admin/WorkflowAssistant';
 
 // Lazy load heavy/reporting components
 const Invoice = lazy(() => import('./components/Invoice'));
@@ -31,7 +31,7 @@ const CancelPage = lazy(() => import('./components/CancelPage'));
 const StaffDashboard = lazy(() => import('./components/staff/StaffDashboard'));
 const PriceReductionWorkflow = lazy(() => import('./components/PriceReductionWorkflow'));
 const AIInvoiceAssistant     = lazy(() => import('./components/AIInvoiceAssistant'));
-const AIBusinessAssistant = lazy(() => import('./components/AIBusinessAssistant'));
+const AIWorkflowAssistant = lazy(() => import('./components/AIWorkflowAssistant'));
 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -130,7 +130,7 @@ const AppContent: React.FC = () => {
           <Route path="/staff-dashboard"             element={<StaffDashboard />} />
           <Route path="/price-reduction" element={<PriceReductionWorkflow user={currentUser} />} />
           <Route path="/ai-invoice" element={<AIInvoiceAssistant user={currentUser} />} />
-          <Route path="/ai-assistant" element={<AIBusinessAssistant user={currentUser} />} />
+          <Route path="/ai-assistant" element={<AIWorkflowAssistant user={currentUser} />} />
         </Routes>
       </Suspense>
     </BrowserRouter>
