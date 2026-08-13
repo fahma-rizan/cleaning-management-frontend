@@ -78,14 +78,14 @@ export default function UpcomingBookingsList({ bookings, onReschedule, onCancel 
                 onClick={() => onReschedule(booking)}
                 className="flex items-center gap-2 px-5 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 font-bold text-sm transition-all shadow-lg shadow-purple-500/20"
               >
-                <Edit className="w-4 h-4" />
+                <Edit className="w-4 h-4" /> {/*reschedule icon*/}
                 Reschedule
               </button>
               <button
                 onClick={() => onCancel(booking)}
                 className="flex items-center gap-2 px-5 py-3 border-2 border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 font-bold text-sm transition-all"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-4 h-4" /> {/*cancel icon*/}
                 Cancel
               </button>
             </div>

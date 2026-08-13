@@ -501,7 +501,7 @@ export default function CustomerDashboard({
               </div>
             ))}
 
-          {/*upcoming*/}
+          {/*upcoming*/} {/*book a service button*/}
           {bookingTab === "upcoming" &&
             (upcomingBookings.length > 0 ? (
               <div className="space-y-6">
@@ -596,7 +596,7 @@ export default function CustomerDashboard({
                           to={`/invoice/${booking.bookingId}`}
                           className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-black font-bold text-sm transition-all"
                         >
-                          <FileText className="w-4 h-4" />
+                          <FileText className="w-4 h-4" /> {/*view invoice icon*/}
                           View Invoice
                         </Link>
                         {booking.status === "completed" && (

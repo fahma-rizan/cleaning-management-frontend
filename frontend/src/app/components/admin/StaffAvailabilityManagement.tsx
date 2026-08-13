@@ -219,7 +219,7 @@ export function StaffAvailabilityManagement() {
             <RefreshCw className="w-5 h-5" />
           </button>
         </div>
-
+       {/*staff availability cards*/}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
           {uniqueStaff.length > 0 ? (
             uniqueStaff.map(staff => (

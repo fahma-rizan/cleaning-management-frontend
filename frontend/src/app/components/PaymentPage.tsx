@@ -81,12 +81,10 @@ export default function PaymentPage({ user, onLogout, theme, onToggleTheme }: Pa
     const completedBooking = {
       ...bookingData,
       paymentMethod: method,
-      paymentMethodName: method === 'full-online' 
-        ? 'Online Payment (Full)' 
-        : `Advance Payment (${percentage || 20}%)`,
       paidAmount,
       balanceAmount,
-      status: method === 'full-online' ? 'confirmed-paid' : 'confirmed-partial',
+      status: 'confirmed',
+      paymentStatus: method === 'full-online' ? 'paid' : 'partial',
       bookingDate: new Date().toISOString(),
     };
 
@@ -329,15 +327,15 @@ export default function PaymentPage({ user, onLogout, theme, onToggleTheme }: Pa
     const completedBooking = {
       ...booking,
       paymentMethod: selectedPaymentMethod,
-      paymentMethodName: getPaymentMethodName(),
       paidAmount,
       balanceAmount,
-      status:
+      status: 'confirmed',
+      paymentStatus:
         selectedPaymentMethod === 'cod' || selectedPaymentMethod === 'pay-after-completion'
-          ? 'confirmed-unpaid'
+          ? 'pending'
           : paidAmount === booking.price
-            ? 'confirmed-paid'
-            : 'confirmed-partial',
+            ? 'paid'
+            : 'partial',
       bookingDate: new Date().toISOString(),
     };
 

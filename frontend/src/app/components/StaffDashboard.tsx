@@ -48,7 +48,7 @@ interface Booking {
   date: string;
   time: string;
   address: string;
-  status: "pending" | "confirmed" | "confirmed-paid" | "confirmed-unpaid" | "in-progress" | "completed" | "cancelled";
+  status: "pending" | "confirmed" | "in-progress" | "completed" | "cancelled";
   amount: number;
   paymentMethod: string;
   cashReceived: boolean;
@@ -196,12 +196,29 @@ export default function StaffDashboard({
   const [invoiceModalData, setInvoiceModalData] = useState<InvoiceData | null>(null);
   const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null);
 
+  // Payment methods where cash/payment must be collected in person after the job
+  const isDeferredPayment = (method: string) =>
+    ['cod', 'pay-after-completion'].includes(method);
+
+  const paymentMethodLabel = (method: string) => {
+    const labels: Record<string, string> = {
+      'cod':                  'Cash on Delivery',
+      'pay-after-completion': 'Pay After Service',
+      'full-online':          'Paid Online',
+      'advance-balance':      'Advance Payment',
+      'online':               'Paid Online',
+      'card':                 'Card Payment',
+      'cash':                 'Cash',
+    };
+    return labels[method] || method;
+  };
+
   // A completed task is fully done (ready to leave My Tasks) when:
-  // material usage submitted + cash received (COD only, otherwise not required)
+  // material usage submitted + cash received (deferred payments only)
   const isTaskDone = (b: Booking) =>
     b.status === "completed" &&
     submittedMaterialIds.has(b._id) &&
-    (b.paymentMethod !== "cod" || b.cashReceived);
+    (!isDeferredPayment(b.paymentMethod) || b.cashReceived);
 
   const buildInvoiceData = (booking: Booking): InvoiceData => {
     const now       = new Date();
@@ -209,12 +226,12 @@ export default function StaffDashboard({
     const code      = booking.service.substring(0, 3).toUpperCase();
     const rand      = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
     const total     = booking.amount;
-    const paid      = booking.paymentMethod === 'cod' ? 0 : total;
+    const paid      = isDeferredPayment(booking.paymentMethod) ? 0 : total;
     const balance   = total - paid;
     const status: InvoiceData['status'] = balance === 0 ? 'paid' : paid > 0 ? 'partial' : 'pending';
     return {
       invoiceNumber: `INV-${code}-${dateStr}-${rand}`,
-      invoiceType:   booking.paymentMethod === 'cod' ? 'cod' : 'full',
+      invoiceType:   isDeferredPayment(booking.paymentMethod) ? 'cod' : 'full',
       date:          now.toLocaleDateString(),
       time:          now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       bookingId:     booking.bookingId || booking._id,
@@ -235,7 +252,7 @@ export default function StaffDashboard({
         paidAmount:   paid,
         balanceAmount: balance,
       },
-      paymentMethod: booking.paymentMethod === 'cod' ? 'Cash on Delivery' : 'Online Payment',
+      paymentMethod: paymentMethodLabel(booking.paymentMethod),
       status,
     };
   };
@@ -402,8 +419,6 @@ export default function StaffDashboard({
         return "bg-blue-100 text-blue-800";
       case "pending":
       case "confirmed":
-      case "confirmed-paid":
-      case "confirmed-unpaid":
         return "bg-yellow-100 text-yellow-800";
       default:
         return "bg-gray-100 text-gray-800";
@@ -436,7 +451,7 @@ export default function StaffDashboard({
     {
       label: "Pending",
       value: bookings.filter((b) =>
-        ["pending", "confirmed", "confirmed-paid", "confirmed-unpaid"].includes(b.status)
+        ["pending", "confirmed"].includes(b.status)
       ).length,
       icon: AlertCircle,
       color: "bg-yellow-500",
@@ -529,7 +544,7 @@ export default function StaffDashboard({
                 </p>
               </div>
             </div>
-            {/* toggle availability button */}
+            {/* mark unavailability button */}
             <button
               onClick={handleAvailabilityToggle}
               className={`px-6 py-3 rounded-lg font-semibold transition-all transform hover:scale-105 ${
@@ -645,14 +660,12 @@ export default function StaffDashboard({
                           <div className="mt-2">
                             <span
                               className={`px-2 py-1 rounded text-xs font-medium ${
-                                booking.paymentMethod === "cod"
+                                isDeferredPayment(booking.paymentMethod)
                                   ? "bg-orange-100 text-orange-800"
                                   : "bg-green-100 text-green-800"
                               }`}
                             >
-                              {booking.paymentMethod === "cod"
-                                ? "Cash on Delivery"
-                                : "Paid Online"}
+                              {paymentMethodLabel(booking.paymentMethod)}
                             </span>
                             {booking.isTeam && (
                               <span className="ml-2 px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800">
@@ -709,12 +722,10 @@ export default function StaffDashboard({
                         <div className="flex gap-2 flex-wrap">
                           {/* Task Status Actions */}
                           {(booking.status === "pending" ||
-                            booking.status === "confirmed" ||
-                            booking.status === "confirmed-paid" ||
-                            booking.status === "confirmed-unpaid") && (
+                            booking.status === "confirmed") && (
                             <>
                               
-                              {/* assigned task buttons */}
+                              {/*assigned task buttons */}
                               <button
                                 onClick={() =>
                                   updateBookingStatus(booking._id, "in-progress")
@@ -774,7 +785,7 @@ export default function StaffDashboard({
                           )}
 
                           {/* Cash collection */}
-                          {booking.paymentMethod === "cod" &&
+                          {isDeferredPayment(booking.paymentMethod) &&
                             !booking.cashReceived && (
                               <button
                                 onClick={() => markCashReceived(booking._id)}
@@ -783,7 +794,7 @@ export default function StaffDashboard({
                                 Mark Cash Received
                               </button>
                             )}
-                          {booking.paymentMethod === "cod" &&
+                          {isDeferredPayment(booking.paymentMethod) &&
                             booking.cashReceived && (
                               <span className="px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg text-sm font-medium">
                                 ✓ Cash Received

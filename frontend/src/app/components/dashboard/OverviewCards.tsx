@@ -109,9 +109,7 @@ export const UpcomingBookingCard = ({ booking, onReschedule, onCancel }: any) =>
 
   // Status badge color
   const statusColors: Record<string, string> = {
-    confirmed:         'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600',
-    'confirmed-paid':  'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600',
-    'confirmed-unpaid':'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600',
+    confirmed:     'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600',
     pending:           'bg-amber-50 dark:bg-amber-900/20 text-amber-600',
     'in-progress':     'bg-blue-50 dark:bg-blue-900/20 text-blue-600',
   };

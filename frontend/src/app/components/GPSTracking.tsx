@@ -31,7 +31,7 @@ const parseTimeSlot = (slot: string) => {
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 
-const ACTIVE_STATUSES = ['pending', 'confirmed', 'confirmed-paid', 'confirmed-unpaid', 'in-progress'];
+const ACTIVE_STATUSES = ['pending', 'confirmed', 'in-progress'];
 
 export default function GPSTracking(_props: GPSTrackingProps) {
   const [activeTasks, setActiveTasks]       = useState<Task[]>([]);
