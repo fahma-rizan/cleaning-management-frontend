@@ -58,6 +58,23 @@ interface CustomerDashboardProps {
   onToggleTheme?: () => void;
 }
 
+// Preset cancellation reasons shown Uber-style before a cancellation is confirmed.
+// "Other" reveals a free-text box so the customer can specify their own reason.
+const CANCELLATION_REASONS = [
+  "Change of plans",
+  "Booked by mistake",
+  "Found a better price elsewhere",
+  "No longer need the service",
+  "Staff assignment or timing concerns",
+  "Cancelled at admin's request",
+  "Other",
+];
+
+// Only selectable when the booking actually has an adminNotificationReason on
+// record (i.e. admin genuinely flagged/notified this booking) — otherwise shown
+// but blurred out so customers can't pick a reason that isn't true.
+const ADMIN_REQUEST_REASON = "Cancelled at admin's request";
+
 export default function CustomerDashboard({
   user,
   onLogout,
@@ -70,6 +87,8 @@ export default function CustomerDashboard({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelReasonOther, setCancelReasonOther] = useState("");
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [rescheduleData, setRescheduleData] = useState({ date: "", time: "" });
   const [bookingTab, setBookingTab] = useState<"ongoing" | "upcoming" | "past">(
@@ -155,6 +174,8 @@ export default function CustomerDashboard({
 
   const handleCancel = (booking: any) => {
     setSelectedBooking(booking);
+    setCancelReason("");
+    setCancelReasonOther("");
     setShowCancelModal(true);
   };
 
@@ -198,16 +219,28 @@ export default function CustomerDashboard({
   const confirmCancel = async () => {
     if (!selectedBooking) return;
 
+    // "Other" needs the free-text box filled in; every other option is used as-is
+    const finalReason =
+      cancelReason === "Other" ? cancelReasonOther.trim() : cancelReason;
+    if (!finalReason) return; // guarded by the disabled button too
+
     try {
       const bookingMongoId = selectedBooking._id;
       const data = await fetchWithAuth(`/bookings/${bookingMongoId}/cancel`, {
         method: 'PATCH',
+        body: JSON.stringify({ reason: finalReason }),
       });
 
       if (data.success) {
         const updatedBookings = bookings.map((b) =>
           (b._id === selectedBooking._id || b.bookingId === selectedBooking.bookingId)
-            ? { ...b, status: 'cancelled' }
+            ? {
+                ...b,
+                status: 'cancelled',
+                cancellationReason: data.booking?.cancellationReason ?? finalReason,
+                cancelledAt: data.booking?.cancelledAt,
+                minutesBeforeService: data.booking?.minutesBeforeService,
+              }
             : b,
         );
         setBookings(updatedBookings);
@@ -220,7 +253,7 @@ export default function CustomerDashboard({
       // Fallback: update locally if API unreachable
       const updatedBookings = bookings.map((b) =>
         b.bookingId === selectedBooking.bookingId
-          ? { ...b, status: 'cancelled' }
+          ? { ...b, status: 'cancelled', cancellationReason: finalReason }
           : b,
       );
       setBookings(updatedBookings);
@@ -229,6 +262,8 @@ export default function CustomerDashboard({
 
     setShowCancelModal(false);
     setSelectedBooking(null);
+    setCancelReason("");
+    setCancelReasonOther("");
   };
 
   // Load admin notifications sent to this customer (stored in localStorage by admin panel)
@@ -576,6 +611,20 @@ export default function CustomerDashboard({
                           {booking.status}
                         </span>
                       </div>
+                      {booking.status === "cancelled" &&
+                        booking.cancellationReason && (
+                          <p className="text-xs text-red-600 dark:text-red-400 font-medium mb-4 -mt-2">
+                            Cancelled: {booking.cancellationReason}
+                            {typeof booking.minutesBeforeService === "number" && (
+                              <>
+                                {" · "}
+                                {booking.minutesBeforeService >= 0
+                                  ? `${booking.minutesBeforeService} min before scheduled time`
+                                  : `${Math.abs(booking.minutesBeforeService)} min after scheduled time`}
+                              </>
+                            )}
+                          </p>
+                        )}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600 dark:text-gray-300 mb-6">
                         <div className="flex items-center gap-2 font-medium">
                           <Calendar className="w-4 h-4 text-purple-500" />
@@ -981,18 +1030,75 @@ export default function CustomerDashboard({
                 className="w-6 h-6 cursor-pointer"
               />
             </div>
-            <p className="text-gray-600 dark:text-gray-300 mb-8 leading-relaxed">
-              Are you sure you want to cancel booking{" "}
+            <p className="text-gray-600 dark:text-gray-300 mb-4 leading-relaxed">
+              Please tell us why you're cancelling booking{" "}
               <span className="font-bold text-gray-900 dark:text-white">
                 #{selectedBooking?.bookingId}
               </span>
-              ? This action will notify the team and might incur a fee if within
+              . This helps us improve our service.
+            </p>
+
+            <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
+              {CANCELLATION_REASONS.map((reason) => {
+                const isAdminRequestOption = reason === ADMIN_REQUEST_REASON;
+                const hasAdminReason = Boolean(
+                  selectedBooking?.adminNotificationReason &&
+                    String(selectedBooking.adminNotificationReason).trim()
+                );
+                const isDisabled = isAdminRequestOption && !hasAdminReason;
+
+                return (
+                  <label
+                    key={reason}
+                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                      isDisabled
+                        ? "opacity-40 blur-[0.4px] grayscale cursor-not-allowed border-gray-200 dark:border-gray-700"
+                        : "cursor-pointer " +
+                          (cancelReason === reason
+                            ? "border-red-500 bg-red-50 dark:bg-red-900/20"
+                            : "border-gray-200 dark:border-gray-700 hover:border-red-300")
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="cancelReason"
+                      value={reason}
+                      checked={cancelReason === reason}
+                      disabled={isDisabled}
+                      onChange={() => setCancelReason(reason)}
+                      className="accent-red-600"
+                    />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                      {reason}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+
+            {cancelReason === "Other" && (
+              <textarea
+                value={cancelReasonOther}
+                onChange={(e) => setCancelReasonOther(e.target.value)}
+                placeholder="Please specify your reason..."
+                rows={3}
+                className="w-full mb-4 p-3 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+            )}
+
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">
+              This action will notify the team and might incur a fee if within
               24 hours.
             </p>
+
             <div className="flex gap-3">
               <button
                 onClick={confirmCancel}
-                className="flex-1 bg-red-600 text-white py-4 rounded-2xl font-bold hover:bg-red-700 transition-all"
+                disabled={
+                  !cancelReason ||
+                  (cancelReason === "Other" && !cancelReasonOther.trim())
+                }
+                className="flex-1 bg-red-600 text-white py-4 rounded-2xl font-bold hover:bg-red-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-600"
               >
                 Cancel Booking
               </button>
