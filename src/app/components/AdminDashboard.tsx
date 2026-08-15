@@ -23,6 +23,7 @@ import { ComplaintsManagement } from './admin/ComplaintsManagement';
 import { GPSTracking }          from './admin/GPSTracking';
 import { ReportsManagement }    from './admin/ReportsManagement';
 import { SystemSettings }       from './admin/SystemSettings';
+import { PaymentsManagement }   from './admin/PaymentsManagement';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface SubItem { id: string; name: string; allowedRoles: AdminRole[]; }
@@ -312,19 +313,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
             {activeTab === 'gps'        && canAccessTab('gps',        user.adminRole) && <GPSTracking />}
             {activeTab === 'reports'    && canAccessTab('reports',    user.adminRole) && <ReportsManagement />}
             {activeTab === 'settings'   && canAccessTab('settings',   user.adminRole) && <SystemSettings />}
-
-            {/* Tabs owned by other teammates */}
-            {activeTab === 'payments' && (
-              <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="text-center">
-                  <p className="text-gray-400 text-xs uppercase tracking-widest font-bold mb-2">Coming soon</p>
-                  <p className="text-purple-600 text-3xl font-black capitalize">
-                    {activeTab.replace(/-/g, ' ')}
-                  </p>
-                  <p className="text-gray-400 text-sm mt-2">This section is handled by another team member</p>
-                </div>
-              </div>
-            )}
+            {activeTab === 'payments'   && canAccessTab('payments',   user.adminRole) && <PaymentsManagement />}
 
           </div>
         </div>
