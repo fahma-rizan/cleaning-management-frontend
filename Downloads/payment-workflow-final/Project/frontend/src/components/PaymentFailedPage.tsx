@@ -11,45 +11,54 @@ interface PaymentFailedPageProps {
 export default function PaymentFailedPage({ user }: PaymentFailedPageProps) {
   const navigate = useNavigate();
   const location = useLocation();
+
+  // location.state is populated when navigating programmatically (e.g. from
+  // our own code). But when PayHere redirects back via cancel_url, it does a
+  // full-page redirect with query params — React Router state is empty in that
+  // case. So we read from BOTH sources.
   const failureData = location.state as {
     orderId?: string;
     statusCode?: string;
     reason?: string;
-    bookingId?: string; // Add bookingId
-    paymentMethod?: string; // Add paymentMethod
+    bookingId?: string;
+    paymentMethod?: string;
   };
 
-  // Send payment failed notification
+  // FIX: also read PayHere's query params from the cancel_url redirect
+  // e.g. /payment-failed?status_code=-1&order_id=BK-xxx&message=...
+  const searchParams = new URLSearchParams(location.search);
+  const payhereOrderId  = searchParams.get('order_id')  || undefined;
+  const payhereMessage  = searchParams.get('message')   || undefined;
+  const payhereStatus   = searchParams.get('status_code') || undefined;
+
+  // Resolve the booking ID — from state (programmatic nav) or PayHere query param
+  const bookingId = failureData?.bookingId || failureData?.orderId || payhereOrderId;
+
+  // Resolve the message — prefer PayHere's own message, fall back to state reason
+  const failureMessage = payhereMessage || failureData?.reason ||
+    'Your payment could not be processed. This may be due to insufficient funds, a cancelled payment, or a declined card.';
+
   useEffect(() => {
-    if (user && (failureData?.orderId || failureData?.bookingId)) {
+    if (user && bookingId) {
       addNotification({
-        userId: user.id,
-        type: 'payment-failed',
-        title: 'Payment Failed ❌',
-        message: `Your payment for order ${failureData.orderId || failureData.bookingId} was unsuccessful. ${failureData.reason || 'Please try again or contact support.'}`,
-        bookingId: failureData.orderId || failureData.bookingId,
+        userId:    user.id,
+        type:      'payment-failed',
+        title:     'Payment Failed ❌',
+        message:   `Your payment for order ${bookingId} was unsuccessful. ${failureMessage}`,
+        bookingId,
       });
     }
-  }, [user, failureData]);
+  }, [user, bookingId, failureMessage]);
 
   const handleRetry = () => {
-    if (failureData?.bookingId) {
-      // If we have the bookingId, we can redirect to the payment gateway
-      navigate(`/payment-gateway/${failureData.bookingId}`, { 
-        replace: true, 
-        state: { 
-          bookingId: failureData.bookingId, 
-          paymentMethod: failureData.paymentMethod 
-        }
+    if (bookingId) {
+      navigate(`/payment-gateway/${bookingId}`, {
+        replace: true,
+        state: { bookingId, paymentMethod: failureData?.paymentMethod },
       });
     } else {
-      // Fallback to previous page if no bookingId is available
       navigate(-1);
     }
-  };
-
-  const handleGoHome = () => {
-    navigate('/');
   };
 
   return (
@@ -63,28 +72,30 @@ export default function PaymentFailedPage({ user }: PaymentFailedPageProps) {
 
         <h1 className="text-2xl font-bold text-gray-900 mb-4">Payment Failed</h1>
 
-        <p className="text-gray-600 mb-6">
-          {failureData?.reason || 'Your payment could not be processed. Please try again or contact our support team.'}
-        </p>
+        <p className="text-gray-600 mb-6">{failureMessage}</p>
 
-        {failureData?.orderId && (
+        {bookingId && (
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
             <p className="text-sm text-gray-600">Order ID</p>
-            <p className="font-mono text-gray-800">{failureData.orderId}</p>
+            <p className="font-mono text-gray-800">{bookingId}</p>
           </div>
+        )}
+
+        {payhereStatus && (
+          <p className="text-xs text-gray-400 mb-4">Status code: {payhereStatus}</p>
         )}
 
         <div className="space-y-3">
           <button
             onClick={handleRetry}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
           >
             <RefreshCw className="w-5 h-5" />
             Try Again
           </button>
 
           <button
-            onClick={handleGoHome}
+            onClick={() => navigate('/')}
             className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
           >
             <Home className="w-5 h-5" />

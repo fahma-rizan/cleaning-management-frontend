@@ -6,6 +6,7 @@ import InvoiceGenerator, { InvoiceData } from './InvoiceGenerator';
 import { addNotification } from '../utils/notificationUtils';
 import type { User } from '../types';
 import DemoTopBar from './DemoTopBar';
+import { tokenStorage } from '../utils/auth';
 
 interface RefundWorkflowProps { user: User; }
 
@@ -22,6 +23,8 @@ interface BookingRecord {
   status: string;
   bookingDate: string;
   address?: string;
+  customerName: string; // FIX: added — same reason as PriceReductionWorkflow,
+                         // rows looked identical without a customer name.
 }
 
 // Refund request stages
@@ -44,26 +47,50 @@ export default function RefundWorkflow({ user }: RefundWorkflowProps) {
   useEffect(() => {
     const fetchBookings = async () => {
       try {
-        const response = await fetch(`http://localhost:4000/api/invoices/user/${user.id}`);
+        const tokens = tokenStorage.getTokens();
+        const authHeader = tokens?.accessToken ? { Authorization: `Bearer ${tokens.accessToken}` } : {};
+
+        // FIX: This page is used by admin/staff to initiate refunds on
+        // behalf of any customer — not just the logged-in user's own
+        // invoices. The old GET /invoices/user/:userId call:
+        //   (a) had no auth header at all → always 401,
+        //   (b) used user.id ('admin-001' for the demo admin) which is not
+        //       a real customer's MongoDB ObjectId, so it could never match
+        //       any actual invoice even with auth fixed.
+        // Switched to GET /invoices (all invoices, admin-only) so any
+        // invoice can be selected for a refund request.
+        const response = await fetch('http://localhost:4000/api/invoices', {
+          headers: authHeader,
+        });
         if (!response.ok) {
           throw new Error('Failed to fetch bookings.');
         }
         const data = await response.json();
-        
+
         // The API returns full invoice objects, so we need to adapt them to the BookingRecord structure.
         const formattedBookings = data.map((inv: any): BookingRecord => ({
           _id: inv._id, // Important: we need the invoice's database ID
           bookingId: inv.bookingId,
-          serviceType: inv.serviceItems[0]?.name || 'Service',
-          date: new Date(inv.createdAt).toLocaleDateString(),
-          time: new Date(inv.createdAt).toLocaleTimeString(),
-          paymentMethod: inv.notes.includes('Cash on Delivery') ? 'cod' : 'online',
-          paymentMethodName: inv.notes,
+          serviceType: inv.serviceItems?.[0]?.name || 'Service',
+          customerName: inv.customer?.name || 'Unknown Customer',
+          // FIX: was using inv.createdAt (when the invoice record was made)
+          // for the 24-hour cancellation eligibility check. That date is
+          // always in the past relative to "now", so every invoice was
+          // permanently shown as ineligible. Now uses the real scheduled
+          // service date/time from the populated Booking document
+          // (inv.serviceDate / inv.serviceTime, added by the backend fix).
+          // Falls back to createdAt only if no booking is linked at all.
+          date: inv.serviceDate || new Date(inv.createdAt).toLocaleDateString(),
+          time: inv.serviceTime || new Date(inv.createdAt).toLocaleTimeString(),
+          // FIX: inv.notes can be undefined — calling .includes() on it crashed
+          // this whole map() silently, leaving the bookings list empty.
+          paymentMethod: (inv.notes || '').includes('Cash on Delivery') ? 'cod' : 'online',
+          paymentMethodName: inv.notes || inv.invoiceType || 'N/A',
           paidAmount: inv.paidAmount,
           balanceAmount: inv.balanceAmount,
-          status: inv.status.toLowerCase(),
+          status: inv.status?.toLowerCase() || 'unknown',
           bookingDate: inv.createdAt,
-          address: inv.customer.address,
+          address: inv.customer?.address || 'N/A',
         }));
 
         setBookings(formattedBookings);
@@ -85,9 +112,20 @@ export default function RefundWorkflow({ user }: RefundWorkflowProps) {
   }, [bookings]);
 
   const canRefund = (booking: BookingRecord) => {
-    const serviceDate = new Date(booking.date);
+    // FIX: booking.date is now the real scheduled service date (e.g.
+    // "2026-06-25"), combined with booking.time for an accurate
+    // 24-hour-before-service comparison. Previously this compared against
+    // the invoice's creation date, which is always in the past — making
+    // every single invoice permanently ineligible regardless of when the
+    // actual service was scheduled.
+    const serviceDateTime = new Date(`${booking.date} ${booking.time || '00:00'}`);
+    if (isNaN(serviceDateTime.getTime())) {
+      // If we can't parse a real service date (e.g. no linked booking),
+      // default to eligible rather than blocking the refund entirely.
+      return true;
+    }
     const now = new Date();
-    return (serviceDate.getTime() - now.getTime()) / (1000 * 60 * 60) > 24;
+    return (serviceDateTime.getTime() - now.getTime()) / (1000 * 60 * 60) > 24;
   };
 
   const isOnlinePayment = (booking: BookingRecord) =>
@@ -99,9 +137,10 @@ export default function RefundWorkflow({ user }: RefundWorkflowProps) {
     setProcessing(true);
 
     try {
+      const token = localStorage.getItem('accessToken');
       const response = await fetch('http://localhost:4000/api/refunds/request', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ invoiceId: selectedBooking._id, reason: refundReason }),
       });
 
@@ -139,9 +178,10 @@ export default function RefundWorkflow({ user }: RefundWorkflowProps) {
     setProcessing(true);
 
     try {
+      const token = localStorage.getItem('accessToken');
       const response = await fetch(`http://localhost:4000/api/refunds/approve/${refundId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({}),
       });
 
@@ -208,9 +248,10 @@ export default function RefundWorkflow({ user }: RefundWorkflowProps) {
     setProcessing(true);
 
     try {
+      const token = localStorage.getItem('accessToken');
       const response = await fetch(`http://localhost:4000/api/refunds/reject/${refundId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ reason }),
       });
 
@@ -328,6 +369,7 @@ export default function RefundWorkflow({ user }: RefundWorkflowProps) {
 
             {/* Summary */}
             <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-gray-500">Customer</span><span className="font-semibold">{selectedBooking?.customerName}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Service</span><span className="font-semibold">{selectedBooking?.serviceType}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Refund Amount</span><span className="font-semibold text-green-600">Rs. {selectedBooking?.paidAmount.toLocaleString()}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Reason</span><span className="font-medium">{refundReason}</span></div>
@@ -408,6 +450,9 @@ export default function RefundWorkflow({ user }: RefundWorkflowProps) {
                         <h3 className="font-semibold text-gray-900">{booking.serviceType}</h3>
                         {!eligible && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">Within 24hrs — not eligible</span>}
                       </div>
+                      {/* FIX: show customer name — invoices for the same
+                          service and amount were indistinguishable without it */}
+                      <p className="text-sm text-purple-600 font-medium">{booking.customerName}</p>
                       <p className="text-sm text-gray-500">{booking.date} at {booking.time}</p>
                       <p className="text-xs text-gray-400 font-mono mt-1">{booking.bookingId}</p>
                     </div>

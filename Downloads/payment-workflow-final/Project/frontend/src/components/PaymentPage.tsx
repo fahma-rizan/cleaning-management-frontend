@@ -5,6 +5,7 @@ import PaymentOptions from './PaymentOptions';
 import { InvoiceData, InvoiceType } from './InvoiceGenerator';
 import { addNotification } from '../utils/notificationUtils';
 import type { User } from '../types';
+import { tokenStorage } from '../utils/auth';
 
 interface PaymentPageProps {
   user: User;
@@ -114,8 +115,18 @@ export default function PaymentPage({ user }: PaymentPageProps) {
       customer: { name: user.name, email: user.email, phone: user.phone || '+94 XXX XXX XXX', address: bookingData.address || 'N/A' },
       // IMPORTANT: The service name is derived from `bookingData.serviceType`.
       // If this is missing from the `currentBooking` in localStorage, the service name will be incorrect.
-      service: { name: bookingData.serviceType || 'Cleaning Service', date: bookingData.date, time: bookingData.time, customizations: [] },
-      pricing: { basePrice: bookingData.price, customizationTotal: 0, total: bookingData.price, paidAmount: paymentDetails.paidAmount, balanceAmount: paymentDetails.balanceAmount },
+      service: {
+        name: bookingData.serviceType || 'Cleaning Service',
+        date: bookingData.date,
+        time: bookingData.time,
+        items: [{ name: bookingData.serviceType || 'Cleaning Service', price: bookingData.price, quantity: 1 }],
+      },
+      pricing: {
+        subtotal: bookingData.price,
+        total: bookingData.price,
+        paidAmount: paymentDetails.paidAmount,
+        balanceAmount: paymentDetails.balanceAmount,
+      },
       paymentMethod: paymentDetails.paymentMethodName,
       // The status now comes directly from getPaymentDetails and is ready for the backend
       status: paymentDetails.status,
@@ -125,33 +136,47 @@ export default function PaymentPage({ user }: PaymentPageProps) {
 const API_BASE_URL = 'http://localhost:4000/api';
 
 // This function transforms the frontend invoice data into the format our backend expects.
+//
+// FIX: This was sending flat top-level fields (subTotal, totalAmount,
+// paidAmount, balanceAmount) but the createInvoice controller destructures
+// req.body.pricing and req.body.payment as nested objects — it checks
+// `if (!pricing)` first thing, which was always true since no `pricing`
+// key existed in the old payload at all. That's why every COD/cash
+// booking confirmation failed with "Missing required fields." regardless
+// of what data was actually filled in.
 const transformInvoiceForBackend = (invoiceData: InvoiceData, user: User): any => {
   return {
     invoiceType: invoiceData.invoiceType.toUpperCase(),
-    // The status now comes directly from the invoiceData and is already in the correct format
-    status: invoiceData.status,
+    bookingId:   invoiceData.bookingId,
     customer: {
-      userId: user.id,
-      name: invoiceData.customer.name,
-      email: invoiceData.customer.email,
-      phone: invoiceData.customer.phone,
+      userId:  user.id,
+      name:    invoiceData.customer.name,
+      email:   invoiceData.customer.email,
+      phone:   invoiceData.customer.phone,
       address: invoiceData.customer.address,
     },
-    bookingId: invoiceData.bookingId,
     // The backend expects an array of serviceItems, not a single service object.
     serviceItems: [{
-      name: invoiceData.service.name,
-      price: invoiceData.pricing.basePrice,
+      name:     invoiceData.service.name,
+      price:    invoiceData.pricing.subtotal,
       quantity: 1,
     }],
     customizationItems: [],
-    discounts: [],
-    taxAmount: 0,
-    subTotal: invoiceData.pricing.basePrice,
-    totalAmount: invoiceData.pricing.total,
-    paidAmount: invoiceData.pricing.paidAmount,
-    balanceAmount: invoiceData.pricing.balanceAmount,
-    notes: `Payment processed via ${invoiceData.paymentMethod}.`,
+    // FIX: nested under `pricing` — matches what createInvoice destructures
+    pricing: {
+      basePrice: invoiceData.pricing.total,
+      discount:  0,
+    },
+    // FIX: nested under `payment` — matches what createInvoice destructures
+    payment: {
+      paidAmount: invoiceData.pricing.paidAmount,
+      status:     invoiceData.status,
+      method:     invoiceData.paymentMethod,
+    },
+    serviceDate:    invoiceData.service.date,
+    serviceTime:    invoiceData.service.time,
+    serviceAddress: invoiceData.customer.address,
+    createdByStaff: user.id,
   };
 };
 
@@ -165,10 +190,19 @@ const transformInvoiceForBackend = (invoiceData: InvoiceData, user: User): any =
     const backendInvoicePayload = transformInvoiceForBackend(invoiceData, user);
 
     try {
+      // FIX: POST /api/invoices is auth-protected on the backend, but this
+      // call had no Authorization header at all — every COD/cash booking
+      // confirmation always failed with 401 Unauthorized.
+      const tokens = tokenStorage.getTokens();
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        ...(tokens?.accessToken ? { Authorization: `Bearer ${tokens.accessToken}` } : {}),
+      };
+
       // 3. Send the invoice to the backend
       const response = await fetch(`${API_BASE_URL}/invoices`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(backendInvoicePayload),
       });
 
@@ -257,7 +291,7 @@ const transformInvoiceForBackend = (invoiceData: InvoiceData, user: User): any =
         <XCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
         <p className="text-red-700 font-semibold">Error Loading Booking</p>
         <p className="text-red-600 text-sm mt-1">{error}</p>
-        <button onClick={() => navigate('/services')} className="mt-6 px-4 py-2 bg-blue-600 text-white rounded-lg">
+        <button onClick={() => navigate('/services')} className="mt-6 px-4 py-2 bg-purple-600 text-white rounded-lg">
           Back to Services
         </button>
       </div>
@@ -272,9 +306,9 @@ const transformInvoiceForBackend = (invoiceData: InvoiceData, user: User): any =
         <div className="max-w-4xl mx-auto">
           <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-purple-600 hover:text-purple-700 mb-6"><ArrowLeft className="w-5 h-5" />Back</button>
           <h1 className="text-4xl font-bold mb-2">Complete Your Booking</h1>
-          <p className="mb-8 text-gray-600">Choose your preferred payment method to confirm your booking</p>```
+          <p className="mb-8 text-gray-600">Choose your preferred payment method to confirm your booking</p>
           <PaymentOptions totalAmount={booking.price} serviceDetails={{ serviceName: booking.serviceType || 'Cleaning Service', customizations: [] }} onPaymentMethodSelect={handlePaymentMethodSelect} advancePercentage={advancePercentage} />
-```          {selectedPaymentMethod && (selectedPaymentMethod === 'cod' || selectedPaymentMethod === 'pay-after-completion') && (
+          {selectedPaymentMethod && (selectedPaymentMethod === 'cod' || selectedPaymentMethod === 'pay-after-completion') && (
             <div className="mt-6">
               <button onClick={() => handlePaymentProcessing(selectedPaymentMethod)} disabled={processing} className={`w-full py-4 rounded-lg text-lg font-semibold transition-colors ${processing ? 'bg-purple-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'} text-white`}>
                 {processing ? <span className="flex items-center justify-center gap-2"><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />Processing...</span> : 'Confirm Booking'}

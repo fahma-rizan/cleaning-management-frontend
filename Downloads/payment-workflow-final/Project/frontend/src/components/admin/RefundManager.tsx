@@ -35,7 +35,8 @@ export default function RefundManager({ isOpen, onClose }: RefundManagerProps) {
         setError(null);
         try {
           // Fetch from the new refunds endpoint
-          const response = await fetch(`${API_BASE_URL}/refunds`);
+          const token = localStorage.getItem('accessToken');
+          const response = await fetch(`${API_BASE_URL}/refunds`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
           if (!response.ok) {
             throw new Error('Failed to fetch refund requests.');
           }
@@ -65,9 +66,10 @@ export default function RefundManager({ isOpen, onClose }: RefundManagerProps) {
   const handleApprove = async (refundId: string) => {
     setProcessing(refundId);
     try {
+      const token = localStorage.getItem('accessToken');
       const response = await fetch(`${API_BASE_URL}/refunds/approve/${refundId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       });
 
       if (!response.ok) {
@@ -94,9 +96,10 @@ export default function RefundManager({ isOpen, onClose }: RefundManagerProps) {
 
     setProcessing(refundId);
     try {
+      const token = localStorage.getItem('accessToken');
       const response = await fetch(`${API_BASE_URL}/refunds/reject/${refundId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ reason }),
       });
 

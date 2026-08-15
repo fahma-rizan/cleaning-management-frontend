@@ -9,9 +9,6 @@ import PaymentGatewayPage from './components/PaymentGatewayPage';
 import PaymentSuccessPage from './components/PaymentSuccessPage';
 import PaymentFailedPage from './components/PaymentFailedPage';
 import BookingSuccessPage from './components/BookingSuccessPage';
-import PriceReductionWorkflow from './components/PriceReductionWorkflow';
-
-
 import WorkflowAssistant from './components/admin/WorkflowAssistant';
 
 // Lazy load heavy/reporting components
@@ -30,6 +27,9 @@ const CancelPage = lazy(() => import('./components/CancelPage'));
 const StaffDashboard = lazy(() => import('./components/staff/StaffDashboard'));
 const PriceReductionWorkflow = lazy(() => import('./components/PriceReductionWorkflow'));
 const AIInvoiceAssistant     = lazy(() => import('./components/AIInvoiceAssistant'));
+// FIX: was missing entirely — this is why /job-complete/:bookingId showed
+// "No routes matched location" when the staff invoice QR code was scanned.
+const JobCompletePage        = lazy(() => import('./components/JobCompletePage'));
 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -61,14 +61,31 @@ const AppContent: React.FC = () => {
 };
 
 
-    const currentUser = user ? { ...user, verified: user.verified ?? false, name: user.name || 'Demo User' } : DEMO_USER;
+    const currentUser = user ? { ...user, verified: user.verified ?? false, name: user.name || 'Demo User' } : DEMO_ADMIN;
+
+  // Sync the demo token into localStorage so tokenStorage.getTokens() works
+  // for all components that read auth via tokenStorage (FinancialDashboard,
+  // EmailTemplates, NotificationCenter, AIInvoiceAssistant, StaffInvoiceViewer,
+  // WorkflowAssistant). Without this, those components send requests with no
+  // Authorization header and get 401 Unauthorized, even though DEMO_ADMIN has
+  // a token defined above.
+  useEffect(() => {
+    if (!user && !localStorage.getItem('accessToken')) {
+      localStorage.setItem('accessToken', DEMO_ADMIN.token);
+      localStorage.setItem('refreshToken', DEMO_ADMIN.token);
+    }
+  }, [user]);
 
   // --- Socket.IO Connection Management ---
   useEffect(() => {
     if (currentUser) {
       // Connect to the server when a user is logged in
       socket.connect();
-      console.log('Socket connected');
+      socket.once('connect', () => {
+        // Register the connected socket with the backend so it can target this user
+        socket.emit('register', currentUser.id);
+        console.log('Socket connected and registered', socket.id);
+      });
     }
 
     // Disconnect when the component unmounts or user logs out
@@ -90,7 +107,8 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <BrowserRouter>
+    <>
+      <BrowserRouter>
       <Toaster richColors position="top-right" />
       <Suspense fallback={
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -129,9 +147,13 @@ const AppContent: React.FC = () => {
           <Route path="/price-reduction" element={<PriceReductionWorkflow user={currentUser} />} />
           <Route path="/ai-invoice" element={<AIInvoiceAssistant user={currentUser} />} />
           <Route path="/ai-assistant" element={<WorkflowAssistant user={currentUser} />} />
+          {/* FIX: added — staff invoice QR code links here to mark a job complete on-site */}
+          <Route path="/job-complete/:bookingId" element={<JobCompletePage />} />
         </Routes>
       </Suspense>
-    </BrowserRouter>
+      </BrowserRouter>
+      <WorkflowAssistant user={currentUser} />
+    </>
   );
 };
 
@@ -142,7 +164,6 @@ export default function App() {
       <AuthProvider>
         <AppContent />
       </AuthProvider>
-      <WorkflowAssistant user={currentUser} />
     </>
   );
 }

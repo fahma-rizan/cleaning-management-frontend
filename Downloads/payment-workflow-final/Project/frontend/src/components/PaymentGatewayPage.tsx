@@ -58,19 +58,75 @@ const PaymentGatewayPage = () => {
           timestamp: Date.now()
         }));
 
-        const form = document.createElement('form');
+        const params: PayHerePayment = { ...payhere_payment, hash };
+
+        // Open checkout in a popup so PayHere can legally close it when finished
+        const popup = window.open('', 'payhere_checkout', 'width=720,height=800');
+        const submitInCurrentWindow = !popup || popup.closed;
+
+        // Create form either in popup (preferred) or in current window (fallback)
+        const targetDoc = submitInCurrentWindow ? document : (popup as Window).document;
+        const form = targetDoc.createElement('form');
         form.method = 'POST';
         form.action = 'https://sandbox.payhere.lk/pay/checkout';
-        const params: PayHerePayment = { ...payhere_payment, hash };
+        form.target = '_self';
+
         for (const key in params) {
-          const input = document.createElement('input');
+          const input = targetDoc.createElement('input');
           input.type = 'hidden';
           input.name = key;
           input.value = (params as any)[key];
           form.appendChild(input);
         }
-        document.body.appendChild(form);
+
+        // Append and submit
+        targetDoc.body.appendChild(form);
         form.submit();
+
+        // If we opened a popup, poll until it closes then verify actual payment status
+        if (!submitInCurrentWindow && popup) {
+          popup.focus();
+          const timer = setInterval(async () => {
+            try {
+              if (popup.closed) {
+                clearInterval(timer);
+
+                // FIX: Previously always navigated to /payment-success when
+                // the popup closed — regardless of whether the user actually
+                // paid, cancelled, or had insufficient funds. PayHere closes
+                // the popup in all cases (success, cancel, failure), so
+                // popup.closed alone tells us nothing about the outcome.
+                //
+                // Fix: after the popup closes, poll our backend for the
+                // booking status. If it's confirmed/completed, the payment
+                // succeeded and PayHere's IPN already updated us. If it's
+                // still pending, the user cancelled or payment failed.
+                try {
+                  const res = await fetch(`http://localhost:4000/api/bookings/${bookingId}`);
+                  const booking = await res.json();
+                  const paid = booking.status === 'confirmed' || booking.status === 'completed';
+                  navigate(paid ? '/payment-success' : '/payment-failed', {
+                    replace: true,
+                    state: paid ? undefined : {
+                      message: 'Payment was not completed. This could be due to insufficient funds, a cancelled payment, or a declined card.',
+                      bookingId,
+                    },
+                  });
+                } catch {
+                  // If we can't reach the backend, check URL as fallback
+                  navigate('/payment-failed', {
+                    replace: true,
+                    state: { message: 'Could not verify payment status. Please contact support.', bookingId },
+                  });
+                }
+              }
+            } catch (e) {
+              // ignore cross-origin access errors while the popup is still on PayHere
+            }
+          }, 500);
+        } else {
+          // fallback: if popup couldn't be opened, we'll rely on the normal redirect flow
+        }
       } catch (error) {
         console.error('Payment initiation failed:', error);
         navigate('/payment-failed', { 

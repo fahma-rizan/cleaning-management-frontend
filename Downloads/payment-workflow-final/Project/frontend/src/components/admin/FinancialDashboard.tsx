@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { socket } from '../../socket';
+import { toast } from 'sonner';
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -23,6 +24,8 @@ import DemoTopBar from '../DemoTopBar';
 import { addNotification } from '../../utils/notificationUtils';
 import { auditLogger, AUDIT_ACTIONS } from '../../utils/auditLogger';
 import { tokenStorage } from '../../utils/auth';
+
+import AdminSidebar from './AdminSidebar';
 
 // Local currency formatting function
 const formatCurrency = (amount: number): string => {
@@ -57,6 +60,8 @@ interface Refund {
   invoice: {
     invoiceNumber: string;
     totalAmount: number;
+    bookingId?: string;
+    customer?: { name: string; email: string };
   };
   refundedAmount: number;
   status: string;
@@ -70,7 +75,8 @@ export default function FinancialDashboard({ user }: FinancialDashboardProps) {
   const [refunds, setRefunds] = useState<Refund[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<string>('today');
+  const [filter, setFilter] = useState<string>('all');
+  const [refundProcessingId, setRefundProcessingId] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null);
   const [approvingInvoiceId, setApprovingInvoiceId] = useState<string | null>(null);
@@ -95,12 +101,67 @@ export default function FinancialDashboard({ user }: FinancialDashboardProps) {
 
   const fetchRefunds = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/refunds`);
+      const tokens = tokenStorage.getTokens();
+      const authHeader = tokens?.accessToken ? { Authorization: `Bearer ${tokens.accessToken}` } : {};
+      const response = await fetch(`${API_BASE_URL}/refunds`, { headers: authHeader });
       if (!response.ok) throw new Error('Failed to fetch refunds');
       const data = await response.json();
       setRefunds(data);
     } catch (err: any) {
       setError(err.message);
+    }
+  };
+
+  // Admin approves a pending refund request — calls PayHere for online
+  // payments, or records a manual cash refund directly.
+  const handleApproveRefund = async (refundId: string) => {
+    if (!window.confirm('Approve this refund? This cannot be undone.')) return;
+    setRefundProcessingId(refundId);
+    try {
+      const tokens = tokenStorage.getTokens();
+      const authHeader = tokens?.accessToken ? { Authorization: `Bearer ${tokens.accessToken}` } : {};
+      const response = await fetch(`${API_BASE_URL}/refunds/approve/${refundId}`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body:    JSON.stringify({}),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.msg || 'Failed to approve refund.');
+      }
+      toast.success('Refund approved successfully.');
+      fetchRefunds();
+      fetchInvoices();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to approve refund.');
+    } finally {
+      setRefundProcessingId(null);
+    }
+  };
+
+  // Admin rejects a pending refund request
+  const handleRejectRefund = async (refundId: string) => {
+    const reason = prompt('Reason for rejecting this refund request:');
+    if (!reason) return;
+    setRefundProcessingId(refundId);
+    try {
+      const tokens = tokenStorage.getTokens();
+      const authHeader = tokens?.accessToken ? { Authorization: `Bearer ${tokens.accessToken}` } : {};
+      const response = await fetch(`${API_BASE_URL}/refunds/reject/${refundId}`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body:    JSON.stringify({ reason }),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.msg || 'Failed to reject refund.');
+      }
+      toast.success('Refund request rejected.');
+      fetchRefunds();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to reject refund.');
+    } finally {
+      setRefundProcessingId(null);
     }
   };
 
@@ -389,6 +450,12 @@ export default function FinancialDashboard({ user }: FinancialDashboardProps) {
     };
   }, []);
 
+  // Refunds awaiting admin action — drives the pending-review panel below
+  const pendingRefunds = useMemo(
+    () => refunds.filter(r => r.status === 'PENDING'),
+    [refunds]
+  );
+
   const filteredInvoices = useMemo(() => {
     const now = new Date();
     const startOfDay = new Date(now.setHours(0, 0, 0, 0));
@@ -519,11 +586,42 @@ export default function FinancialDashboard({ user }: FinancialDashboardProps) {
             </div>
           )}
 
+          {/* Pending refunds banner — shown when customers have requested refunds */}
+          {pendingRefunds.length > 0 && (
+            <div className="mb-6 flex items-center gap-4 bg-red-50 border border-red-200 rounded-xl px-5 py-4">
+              <RefreshCw className="w-5 h-5 text-red-600 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-red-800">
+                  {pendingRefunds.length} refund request{pendingRefunds.length > 1 ? 's' : ''} awaiting your review
+                </p>
+                <p className="text-xs text-red-600 mt-0.5">
+                  Customers are waiting — review and approve or reject below.
+                </p>
+              </div>
+              <button
+                onClick={() => document.getElementById('pending-refunds-panel')?.scrollIntoView({ behavior: 'smooth' })}
+                className="text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+              >
+                Review Now
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Financial Dashboard</h1>
               <p className="text-gray-600 mt-1">Overview of all financial transactions</p>
             </div>            <div className="flex space-x-2">
+              <button
+                onClick={() => setFilter('all')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                  filter === 'all'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                All
+              </button>
               <button
                 onClick={() => setFilter('today')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium ${
@@ -678,6 +776,61 @@ export default function FinancialDashboard({ user }: FinancialDashboardProps) {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Pending Refunds — admin review panel */}
+          <div id="pending-refunds-panel" className="bg-white rounded-xl p-6 shadow-sm mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              Pending Refund Requests
+              {pendingRefunds.length > 0 && (
+                <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
+                  {pendingRefunds.length}
+                </span>
+              )}
+            </h2>
+
+            {pendingRefunds.length === 0 ? (
+              <p className="text-gray-400 text-sm py-4 text-center">No refund requests waiting for review.</p>
+            ) : (
+              <div className="space-y-3">
+                {pendingRefunds.map(refund => (
+                  <div key={refund._id} className="border border-gray-200 rounded-lg p-4 flex items-center justify-between gap-4 flex-wrap">
+                    <div className="flex-1 min-w-[200px]">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-gray-900">{refund.invoice?.customer?.name || 'Unknown Customer'}</span>
+                        <span className="text-xs font-mono text-gray-400">{refund.invoice?.invoiceNumber}</span>
+                      </div>
+                      <p className="text-sm text-gray-500 mt-0.5">
+                        Rs. {refund.refundedAmount.toLocaleString()} — {refund.reason}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Requested {new Date(refund.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleApproveRefund(refund._id)}
+                        disabled={refundProcessingId === refund._id}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:bg-green-300 transition-colors"
+                      >
+                        {refundProcessingId === refund._id
+                          ? <Loader className="w-4 h-4 animate-spin" />
+                          : <CheckSquare className="w-4 h-4" />}
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleRejectRefund(refund._id)}
+                        disabled={refundProcessingId === refund._id}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-300 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Recent Invoices */}

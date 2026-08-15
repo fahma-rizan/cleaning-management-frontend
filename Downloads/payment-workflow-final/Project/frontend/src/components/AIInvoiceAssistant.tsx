@@ -151,6 +151,8 @@ const buildInvoiceData = (aiData: any): InvoiceData => {
 
 export default function AIInvoiceAssistant({ user }: AIInvoiceAssistantProps) {
   const navigate = useNavigate();
+  const API = 'http://localhost:4000/api';
+  const [aiEnabled, setAiEnabled] = useState<boolean | null>(null);
   const [messages, setMessages]     = useState<Message[]>([]);
   const [input, setInput]           = useState('');
   const [loading, setLoading]       = useState(false);
@@ -172,6 +174,23 @@ export default function AIInvoiceAssistant({ user }: AIInvoiceAssistantProps) {
       role: 'assistant',
       content: `Hi! I'm your AI invoice assistant. Just tell me what you need and I'll create the invoice for you.\n\nFor example: *"Invoice for Kavya Perera, kavya@email.com, +94771234567, 45 Galle Road Colombo. House deep cleaning 1500 sqft normal, 2 bathrooms. Service on 15th June at 9am. Cash payment."*\n\nOr describe it step by step — I'll ask for anything I'm missing.`,
     }]);
+  }, []);
+
+  // Check server-side AI availability
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch(`${API}/assistant/status`);
+        const json = await res.json();
+        if (!mounted) return;
+        setAiEnabled(!!json.enabled);
+      } catch (err) {
+        if (!mounted) return;
+        setAiEnabled(false);
+      }
+    })();
+    return () => { mounted = false; };
   }, []);
 
   // ── Call Claude API ────────────────────────────────────────────────────────
@@ -326,6 +345,18 @@ export default function AIInvoiceAssistant({ user }: AIInvoiceAssistantProps) {
   };
 
   const hasSplitLayout = !!invoiceData;
+
+  if (aiEnabled === false) {
+    return (
+      <div style={{ padding: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+        <div style={{ fontSize: '22px', fontWeight: 700 }}>AI Invoice Assistant — Coming Soon</div>
+        <div style={{ maxWidth: 800, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+          The AI invoice assistant is currently disabled on this server. Once the AI service is configured, this page will be available.
+        </div>
+        <button onClick={() => navigate(-1)} style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg,#7c3aed,#a855f7)', color: 'white' }}>Back</button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--color-background-tertiary)' }}>

@@ -5,7 +5,6 @@ import { socket } from '../socket';
 import InvoiceGenerator, { InvoiceData, InvoiceType } from './InvoiceGenerator';
 import { tokenStorage } from '../utils/auth';
 
-// Shape of the invoice as it comes from the MongoDB API
 interface DBInvoice {
   _id: string;
   invoiceNumber: string;
@@ -32,8 +31,6 @@ interface DBInvoice {
 
 const API = 'http://localhost:4000/api';
 
-// ── Map a MongoDB invoice document to the InvoiceData shape that
-//    InvoiceGenerator expects so we always show the same beautiful A4 layout.
 function mapDBInvoiceToInvoiceData(inv: DBInvoice): InvoiceData {
   const totalDiscount = (inv.discounts || []).reduce((s, d) => s + d.amount, 0);
   const created = new Date(inv.createdAt);
@@ -68,8 +65,8 @@ function mapDBInvoiceToInvoiceData(inv: DBInvoice): InvoiceData {
       paidAmount:    inv.paidAmount,
       balanceAmount: inv.balanceAmount,
     },
-    paymentMethod: inv.invoiceType === 'COD' ? 'Cash on Delivery'
-                 : inv.invoiceType === 'ADVANCE' ? 'Online (PayHere) — Advance'
+    paymentMethod: inv.invoiceType === 'COD'     ? 'Cash on Delivery'
+                 : inv.invoiceType === 'ADVANCE'  ? 'Online (PayHere) — Advance'
                  : 'Online (PayHere)',
     status: inv.status as InvoiceData['status'],
   };
@@ -78,30 +75,24 @@ function mapDBInvoiceToInvoiceData(inv: DBInvoice): InvoiceData {
 export default function StaffInvoiceViewer() {
   const { invoiceNumber } = useParams<{ invoiceNumber: string }>();
   const navigate = useNavigate();
-  const [dbInvoice,       setDbInvoice]       = useState<DBInvoice | null>(null);
-  const [invoiceData,     setInvoiceData]      = useState<InvoiceData | null>(null);
-  const [loading,         setLoading]          = useState(true);
-  const [error,           setError]            = useState<string | null>(null);
-  const [isProcessing,    setIsProcessing]     = useState(false);
-  const [processingError, setProcessingError]  = useState<string | null>(null);
+  const [dbInvoice,       setDbInvoice]      = useState<DBInvoice | null>(null);
+  const [invoiceData,     setInvoiceData]    = useState<InvoiceData | null>(null);
+  const [loading,         setLoading]        = useState(true);
+  const [error,           setError]          = useState<string | null>(null);
+  const [isProcessing,    setIsProcessing]   = useState(false);
+  const [processingError, setProcessingError]= useState<string | null>(null);
 
-  // FIX: Get the auth token from localStorage so protected routes work
   const getAuthHeader = () => {
     const tokens = tokenStorage.getTokens();
     return tokens?.accessToken ? { Authorization: `Bearer ${tokens.accessToken}` } : {};
   };
 
   useEffect(() => {
-    if (!invoiceNumber) {
-      setError('No invoice number provided.');
-      setLoading(false);
-      return;
-    }
+    if (!invoiceNumber) { setError('No invoice number provided.'); setLoading(false); return; }
 
     const fetchInvoice = async () => {
       try {
         setLoading(true);
-        // FIX: Added auth header — GET /:invoiceNumber is now a protected route
         const response = await fetch(`${API}/invoices/${invoiceNumber}`, {
           headers: { ...getAuthHeader() },
         });
@@ -111,7 +102,6 @@ export default function StaffInvoiceViewer() {
         }
         const data: DBInvoice = await response.json();
         setDbInvoice(data);
-        // FIX: Map to InvoiceData so InvoiceGenerator can render the full A4 layout
         setInvoiceData(mapDBInvoiceToInvoiceData(data));
       } catch (err: any) {
         setError(err.message);
@@ -122,7 +112,6 @@ export default function StaffInvoiceViewer() {
 
     fetchInvoice();
 
-    // Real-time update via Socket.IO
     const handleUpdate = (updated: DBInvoice) => {
       if (updated.invoiceNumber === invoiceNumber) {
         setDbInvoice(updated);
@@ -133,8 +122,6 @@ export default function StaffInvoiceViewer() {
     return () => { socket.off('invoiceUpdate', handleUpdate); };
   }, [invoiceNumber]);
 
-  // FIX: Added auth header — POST /:id/mark-as-paid is a protected route.
-  //      Previously this call had no header and always returned 401.
   const handleMarkAsPaid = async () => {
     if (!dbInvoice) return;
     setIsProcessing(true);
@@ -148,7 +135,6 @@ export default function StaffInvoiceViewer() {
         const err = await response.json();
         throw new Error(err.msg || 'Failed to mark as paid.');
       }
-      // Socket event will update the state via handleUpdate above
     } catch (err: any) {
       setProcessingError(err.message);
     } finally {
@@ -156,35 +142,27 @@ export default function StaffInvoiceViewer() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <Loader className="animate-spin text-purple-600 w-10 h-10" />
-        <p className="ml-4 text-gray-600">Loading invoice...</p>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <Loader className="animate-spin text-purple-600 w-10 h-10" />
+      <p className="ml-4 text-gray-600">Loading invoice...</p>
+    </div>
+  );
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-500 text-lg mb-4">{error}</p>
-          <button onClick={() => navigate(-1)} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
-            Go Back
-          </button>
-        </div>
+  if (error) return (
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="text-center">
+        <p className="text-red-500 text-lg mb-4">{error}</p>
+        <button onClick={() => navigate(-1)} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">Go Back</button>
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (!invoiceData || !dbInvoice) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <p className="text-gray-600">Invoice not found.</p>
-      </div>
-    );
-  }
+  if (!invoiceData || !dbInvoice) return (
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <p className="text-gray-600">Invoice not found.</p>
+    </div>
+  );
 
   const canMarkAsPaid = dbInvoice.status !== 'PAID' && dbInvoice.balanceAmount > 0;
 
@@ -192,7 +170,6 @@ export default function StaffInvoiceViewer() {
     <div className="min-h-screen bg-gray-100 p-8">
       <div className="max-w-[210mm] mx-auto">
 
-        {/* Top bar — hidden when printing */}
         <div className="flex justify-between items-center mb-6 no-print">
           <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-600 hover:text-gray-800">
             <ArrowLeft className="w-5 h-5" /> Back
@@ -201,13 +178,9 @@ export default function StaffInvoiceViewer() {
           <div />
         </div>
 
-        {/* FIX: Render InvoiceGenerator instead of the old plain layout.
-               This gives the same formatted A4 invoice — with logo, purple
-               header, table, QR code, terms — that staff saw in the preview.
-               The Download PDF button is included inside InvoiceGenerator. */}
-        <InvoiceGenerator invoice={invoiceData} />
+        {/* isStaff=true → QR encodes staff invoice URL for on-site management */}
+        <InvoiceGenerator invoice={invoiceData} isStaff={true} />
 
-        {/* Mark as paid action — only for COD / balance-owed invoices */}
         {canMarkAsPaid && (
           <div className="mt-6 no-print">
             <button

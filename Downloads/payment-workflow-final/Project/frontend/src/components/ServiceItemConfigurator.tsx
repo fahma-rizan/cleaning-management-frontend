@@ -143,9 +143,11 @@ export default function ServiceItemConfigurator({ onAddItem, onClose }: ServiceI
                 className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
                 onChange={(e) => {
                   const group = pricing.groups?.find(g => g.id === e.target.value);
-                  const quantity = config.quantity || 1;
-                  setConfig({ ...config, group, quantity });
-                  setCalculatedPrice((group?.price || 0) * quantity);
+                  // FIX: Don't default quantity to 1 — wait for user input.
+                  // Previously this calculated a price for qty=1 immediately
+                  // on service selection, before the user typed a quantity.
+                  setConfig({ ...config, group, quantity: 0 });
+                  setCalculatedPrice(0);
                   setItemName(`${serviceName}`);
                   setItemDescription(`${group?.label}`);
                 }}
@@ -159,10 +161,11 @@ export default function ServiceItemConfigurator({ onAddItem, onClose }: ServiceI
               <input
                 type="number"
                 min="1"
-                defaultValue="1"
+                placeholder="Enter quantity"
+                value={config.quantity || ''}
                 className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
                 onChange={(e) => {
-                  const quantity = Number(e.target.value);
+                  const quantity = Number(e.target.value) || 0;
                   setConfig({ ...config, quantity });
                   setCalculatedPrice((config.group?.price || 0) * quantity);
                   setItemDescription(`${config.group?.label}\nQuantity: ${quantity}`);
@@ -195,8 +198,13 @@ export default function ServiceItemConfigurator({ onAddItem, onClose }: ServiceI
 
     if (calculatedPrice > 0 && itemName) {
       // For 'per-item', the quantity is part of the calculation, so we add it as a single line item.
-      const finalQuantity = selectedService.pricingType === 'per-item' ? config.quantity : 1;
-      const finalPrice = selectedService.pricingType === 'per-item' ? config.group.price : calculatedPrice;
+      const finalQuantity = selectedService.pricingType === 'per-item' ? (config.quantity || 0) : 1;
+      const finalPrice = selectedService.pricingType === 'per-item' ? (config.group?.price || 0) : calculatedPrice;
+
+      if (selectedService.pricingType === 'per-item' && finalQuantity <= 0) {
+        alert('Please enter a quantity before adding.');
+        return;
+      }
 
       onAddItem({
         name: itemName,
@@ -275,7 +283,7 @@ export default function ServiceItemConfigurator({ onAddItem, onClose }: ServiceI
                       <span className="text-2xl font-black text-purple-600">
                         Rs. {
                           selectedService?.pricingType === 'per-item' 
-                          ? ((config.group?.price || 0) * (config.quantity || 1)).toLocaleString()
+                          ? ((config.group?.price || 0) * (config.quantity || 0)).toLocaleString()
                           : calculatedPrice.toLocaleString()
                         }
                       </span>
@@ -292,7 +300,11 @@ export default function ServiceItemConfigurator({ onAddItem, onClose }: ServiceI
           <button onClick={onClose} className="px-6 py-2.5 rounded-xl font-semibold text-gray-600 hover:bg-gray-200 transition-colors">Cancel</button>
           <button 
             onClick={handleAddToInvoice} 
-            disabled={!selectedService || (selectedService.pricingType !== 'per-unit' && calculatedPrice === 0)}
+            disabled={
+              !selectedService ||
+              (selectedService.pricingType === 'per-item' && (!config.group || !config.quantity || config.quantity <= 0)) ||
+              (selectedService.pricingType !== 'per-unit' && selectedService.pricingType !== 'per-item' && calculatedPrice === 0)
+            }
             className="px-8 py-2.5 rounded-xl font-bold bg-purple-600 text-white hover:bg-purple-700 shadow-lg shadow-purple-200 disabled:bg-gray-300 disabled:shadow-none transition-all"
           >
             Add to Invoice

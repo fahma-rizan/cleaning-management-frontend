@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { addNotification } from '../utils/notificationUtils';
 import type { User } from '../types';
 import DemoTopBar from './DemoTopBar';
+import { tokenStorage } from '../utils/auth';
 
 interface PriceReductionWorkflowProps { user: User; }
 
@@ -18,6 +19,9 @@ interface BookingRecord {
   balanceAmount: number;
   status: string;
   date: string;
+  customerName: string; // FIX: added — without this, every invoice row
+                         // looked identical when several customers booked
+                         // the same service type for the same amount.
 }
 
 type Stage = 'select' | 'pending-approval' | 'approved' | 'rejected';
@@ -51,9 +55,17 @@ export default function PriceReductionWorkflow({ user }: PriceReductionWorkflowP
   useEffect(() => {
     const fetchInvoices = async () => {
       try {
-        const res = await fetch(`${API}/invoices/user/${user.id}`, {
-          headers: { Authorization: `Bearer ${user.token}` },
-        });
+        const tokens = tokenStorage.getTokens();
+        const authHeader = tokens?.accessToken ? { Authorization: `Bearer ${tokens.accessToken}` } : {};
+
+        // FIX: Was calling /invoices/user/${user.id} with user.token (only
+        // exists on DEMO_ADMIN, undefined for any other user shape) and
+        // user.id ('admin-001' for the demo admin — not a real customer
+        // ObjectId, so it could never match any actual invoice's
+        // customer.userId). Switched to GET /invoices (all invoices) since
+        // this page is used by admin/staff to process reduction requests
+        // for any customer, not just their own bookings.
+        const res = await fetch(`${API}/invoices`, { headers: authHeader });
         if (!res.ok) throw new Error('Failed to fetch invoices.');
         const data = await res.json();
 
@@ -64,6 +76,7 @@ export default function PriceReductionWorkflow({ user }: PriceReductionWorkflowP
             bookingId:     inv.bookingId,
             invoiceNumber: inv.invoiceNumber,
             serviceType:   inv.serviceItems?.[0]?.name || 'Service',
+            customerName:  inv.customer?.name || 'Unknown Customer',
             totalAmount:   inv.totalAmount,
             paidAmount:    inv.paidAmount,
             balanceAmount: inv.balanceAmount,
@@ -79,7 +92,7 @@ export default function PriceReductionWorkflow({ user }: PriceReductionWorkflowP
       }
     };
     fetchInvoices();
-  }, [user.id, user.token]);
+  }, []);
 
   const validateAmount = (val: string) => {
     if (!selected) return;
@@ -103,7 +116,7 @@ export default function PriceReductionWorkflow({ user }: PriceReductionWorkflowP
     try {
       const res = await fetch(`${API}/price-reductions/request`, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+        headers: { 'Content-Type': 'application/json', ...(tokenStorage.getTokens()?.accessToken ? { Authorization: `Bearer ${tokenStorage.getTokens()?.accessToken}` } : {}) },
         body:    JSON.stringify({ invoiceId: selected!._id, requestedAmount: parseFloat(requestedAmount), reason }),
       });
       if (!res.ok) {
@@ -129,53 +142,11 @@ export default function PriceReductionWorkflow({ user }: PriceReductionWorkflowP
     }
   };
 
-  // Step 2a — admin approves (demo panel)
-  const handleAdminApprove = async () => {
-    if (!reductionId) return;
-    setProcessing(true);
-    try {
-      const res = await fetch(`${API}/price-reductions/approve/${reductionId}`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
-        body:    JSON.stringify({ approvedAmount: parseFloat(requestedAmount) }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.msg || 'Failed to approve reduction.');
-      }
-      const data = await res.json();
-      setApprovedAmount(data.reduction.approvedAmount);
-      setStage('approved');
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  // Step 2b — admin rejects (demo panel)
-  const handleAdminReject = async () => {
-    if (!reductionId) return;
-    setProcessing(true);
-    const rejectReason = 'The requested reduction does not meet our price adjustment policy.';
-    try {
-      const res = await fetch(`${API}/price-reductions/reject/${reductionId}`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
-        body:    JSON.stringify({ reason: rejectReason }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.msg || 'Failed to reject reduction.');
-      }
-      setRejectionReason(rejectReason);
-      setStage('rejected');
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setProcessing(false);
-    }
-  };
+  // FIX: handleAdminApprove/handleAdminReject removed — approval now
+  // happens from the admin's Financial Dashboard, not from this
+  // customer-facing confirmation page. The backend routes
+  // (POST /price-reductions/approve/:id and /reject/:id) are unchanged
+  // and ready to be wired into a proper admin review screen.
 
   // ── Rejected screen ───────────────────────────────────────────────────
   if (stage === 'rejected') {
@@ -220,12 +191,16 @@ export default function PriceReductionWorkflow({ user }: PriceReductionWorkflowP
                 : `Your invoice balance has been reduced by Rs. ${approvedAmount?.toLocaleString()}.`}
             </p>
             <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-gray-500">Customer</span><span className="font-semibold">{selected!.customerName}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Booking ID</span><span className="font-mono font-semibold">{selected!.bookingId}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Reduction</span><span className="font-semibold text-green-600">Rs. {approvedAmount?.toLocaleString()}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Invoice</span><span className="font-mono text-xs">{selected!.invoiceNumber}</span></div>
             </div>
-            <button onClick={() => navigate('/payment')} className="w-full bg-gray-100 text-gray-700 py-3 rounded-lg hover:bg-gray-200">
-              Back to Payments
+            {/* FIX: was navigating to '/payment' with no bookingId param —
+                that route requires :bookingId and would error. Send the
+                admin back to the dashboard instead, which always works. */}
+            <button onClick={() => navigate('/admin/financial-dashboard')} className="w-full bg-gray-100 text-gray-700 py-3 rounded-lg hover:bg-gray-200">
+              Back to Dashboard
             </button>
           </div>
         </div>
@@ -248,25 +223,23 @@ export default function PriceReductionWorkflow({ user }: PriceReductionWorkflowP
               Your request for a <span className="font-semibold">Rs. {parseFloat(requestedAmount).toLocaleString()}</span> reduction on booking <span className="font-semibold">{selected?.bookingId}</span> has been submitted.
             </p>
             <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-gray-500">Customer</span><span className="font-semibold">{selected?.customerName}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Service</span><span className="font-semibold">{selected?.serviceType}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Requested reduction</span><span className="font-semibold text-green-600">Rs. {parseFloat(requestedAmount).toLocaleString()}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Reason</span><span className="font-medium">{reason}</span></div>
             </div>
 
-            {/* Demo admin panel */}
+            {/* FIX: Removed the "Demo admin panel" that let anyone viewing
+                this customer-facing confirmation page approve or reject
+                their own request — a real production bypass of the
+                approval workflow. Admin now reviews and acts on price
+                reduction requests from the Financial Dashboard, where they
+                have full context (invoice history, customer details,
+                service record) — not from this public confirmation screen. */}
             <div className="border-t border-gray-200 pt-5 mt-2">
-              <p className="text-xs text-gray-400 mb-3 uppercase tracking-wide font-semibold">Admin Action (Demo)</p>
-              <div className="flex gap-3">
-                <button onClick={handleAdminApprove} disabled={processing}
-                  className={`flex-1 py-3 rounded-xl font-semibold text-white transition-all ${processing ? 'bg-green-300' : 'bg-green-500 hover:bg-green-600'}`}>
-                  {processing ? <RefreshCw className="w-4 h-4 animate-spin mx-auto" /> : 'Approve'}
-                </button>
-                <button onClick={handleAdminReject} disabled={processing}
-                  className={`flex-1 py-3 rounded-xl font-semibold text-white transition-all ${processing ? 'bg-red-300' : 'bg-red-500 hover:bg-red-600'}`}>
-                  Reject
-                </button>
-              </div>
-              <p className="text-xs text-gray-400 mt-2">In production, only admins see this panel.</p>
+              <p className="text-sm text-gray-500">
+                You'll be notified by email once an admin reviews your request — usually within 1-2 business days.
+              </p>
             </div>
           </div>
         </div>
@@ -311,6 +284,11 @@ export default function PriceReductionWorkflow({ user }: PriceReductionWorkflowP
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="font-semibold text-gray-900 mb-1">{inv.serviceType}</h3>
+                      {/* FIX: show which customer this invoice belongs to —
+                          without this, rows with the same service and amount
+                          (very common — e.g. multiple Rs. 7,500 cleanings)
+                          were visually indistinguishable. */}
+                      <p className="text-sm text-purple-600 font-medium">{inv.customerName}</p>
                       <p className="text-sm text-gray-500">{inv.date}</p>
                       <p className="text-xs text-gray-400 font-mono mt-1">{inv.bookingId}</p>
                     </div>

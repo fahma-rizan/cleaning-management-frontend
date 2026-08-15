@@ -24,8 +24,16 @@
 
 const ALGORITHM = 'AES-GCM' as const;
 
+const getRuntimeEnv = () => {
+  const windowEnv = typeof window !== 'undefined' ? (window as Window & { __APP_ENV__?: Record<string, string | undefined> }).__APP_ENV__ : undefined;
+  const processEnv = typeof process !== 'undefined' ? (process as typeof process & { env?: Record<string, string | undefined> }).env : undefined;
+  return windowEnv || processEnv || {};
+};
+
+const getEnvVar = (key: string): string | undefined => getRuntimeEnv()[key];
+
 // Validate key is configured at module load time — fail loudly, not silently
-const RAW_KEY = import.meta.env.VITE_ENCRYPTION_KEY as string | undefined;
+const RAW_KEY = getEnvVar('VITE_ENCRYPTION_KEY') as string | undefined;
 if (!RAW_KEY) {
   console.error(
     '[encryption] VITE_ENCRYPTION_KEY is not set in your .env file. ' +

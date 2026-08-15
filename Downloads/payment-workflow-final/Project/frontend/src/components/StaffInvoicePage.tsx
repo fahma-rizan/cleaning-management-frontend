@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Trash2, FileText, Eye } from 'lucide-react';
+import { toast } from 'sonner';
 import InvoiceGenerator, { InvoiceData } from './InvoiceGenerator';
 import type { User } from '../types';
 import DemoTopBar from './DemoTopBar';
 import ServiceItemConfigurator from './ServiceItemConfigurator';
+import { tokenStorage } from '../utils/auth';
 
 import homeCleaningImg    from '../assets/home-cleaning.jpg';
 import laundryCleaningImg from '../assets/laundry-cleaning.jpg';
 import shampooVacumImg    from '../assets/Shampoo-Vacum.jpg';
 import curtainCleaningImg from '../assets/curtain-cleaning.jpg';
 import commonImg          from '../assets/common-service.jpg';
-import logoImg            from '../assets/61e339fdac995bb65c1169259330f5728c465e0f.png';
+import logoImg            from '../assets/logo.png';
 
 const categoryImages: Record<string, string> = {
   home: homeCleaningImg, laundry: laundryCleaningImg,
@@ -44,6 +46,7 @@ export default function StaffInvoicePage({ user }: StaffInvoicePageProps) {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [preview,       setPreview]       = useState(false);
   const [savedInvoice,  setSavedInvoice]  = useState<InvoiceData | null>(null);
+  const [isPersisted,   setIsPersisted]   = useState(false); // true only after a real DB save
   const [isConfiguratorOpen, setIsConfiguratorOpen] = useState(false);
   const [loading,       setLoading]       = useState(false);
   const [error,         setError]         = useState<string | null>(null);
@@ -93,12 +96,16 @@ export default function StaffInvoicePage({ user }: StaffInvoicePageProps) {
     const prefix = mainCategories.length > 1 ? 'MULTI' : (mainCategories[0] || 'SRV');
 
     return {
-      invoiceNumber: `${prefix}-${dateStr}-${Math.floor(Math.random() * 9999).toString().padStart(4, '0')}`,
+      // FIX: Added INV- prefix to match the format used everywhere else
+      // (e.g. INV-HOC-20260619-0001) so all invoice numbers are consistent.
+      invoiceNumber: `INV-${prefix}-${dateStr}-${Math.floor(Math.random() * 9999).toString().padStart(4, '0')}`,
       mainCategories,
       invoiceType:  paymentMethod === 'cod' ? 'COD' : 'FULL',
       date:         now.toLocaleDateString(),
       time:         now.toLocaleTimeString(),
-      bookingId:    `MANUAL-${Date.now().toString().slice(-6)}`,
+      // FIX: Use BK- prefix to match the format used by real bookings
+      // (e.g. BK-1776787534782) instead of MANUAL-296500.
+      bookingId:    `BK-MANUAL-${Date.now()}`,
       customer:     { name: customerName, email: customerEmail, phone: customerPhone, address: customerAddr },
       service: {
         name: items[0]?.name || 'General Service',
@@ -114,11 +121,22 @@ export default function StaffInvoicePage({ user }: StaffInvoicePageProps) {
         subtotal,
         discount,
         total,
-        paidAmount:    paymentMethod === 'cod' ? 0 : total,
-        balanceAmount: paymentMethod === 'cod' ? total : 0,
+        // FIX: Payment status now correctly reflects each method:
+        // - 'cash'   = staff collected payment right now → fully paid
+        // - 'cod'    = customer will pay cash on delivery later → unpaid, balance owed
+        // - 'online' = staff cannot verify online payment themselves →
+        //              invoice is created as SENT with a payment link sent to
+        //              customer, NOT marked paid (that only happens via the
+        //              real PayHere IPN webhook after the customer actually pays)
+        paidAmount:    paymentMethod === 'cash' ? total : 0,
+        balanceAmount: paymentMethod === 'cash' ? 0 : total,
       },
-      paymentMethod: paymentMethod === 'cod' ? 'Cash on Delivery' : paymentMethod === 'cash' ? 'Cash' : 'Online Payment',
-      status: paymentMethod === 'cod' ? 'SENT' : 'PAID',
+      paymentMethod: paymentMethod === 'cod'   ? 'Cash on Delivery'
+                   : paymentMethod === 'cash'  ? 'Cash'
+                   : 'Online Payment (Link Sent)',
+      // FIX: Only 'cash' (paid right now, in person) is marked PAID.
+      // 'cod' and 'online' are both SENT — payment is collected later.
+      status: paymentMethod === 'cash' ? 'PAID' : 'SENT',
     };
   };
 
@@ -129,6 +147,11 @@ export default function StaffInvoicePage({ user }: StaffInvoicePageProps) {
   const transformForAPI = (invoice: InvoiceData) => ({
     invoiceType: invoice.invoiceType,
     bookingId:   invoice.bookingId,
+    // FIX: pass these so the backend can build a real Booking document
+    // for this manually-created invoice (see createInvoice controller)
+    serviceDate:    serviceDate,
+    serviceTime:    serviceTime,
+    serviceAddress: customerAddr,
     customer: {
       name:    invoice.customer.name,
       email:   invoice.customer.email,
@@ -158,6 +181,7 @@ export default function StaffInvoicePage({ user }: StaffInvoicePageProps) {
   const handlePreview = () => {
     if (!isValid) return;
     setSavedInvoice(buildInvoice());
+    setIsPersisted(false); // preview only — not saved to DB yet
     setPreview(true);
     setError(null);
   };
@@ -170,11 +194,16 @@ export default function StaffInvoicePage({ user }: StaffInvoicePageProps) {
       const frontendInvoice = buildInvoice();
       const payload = transformForAPI(frontendInvoice);
 
+      // FIX: was using user.token which doesn't exist on the User type —
+      // always undefined, causing every save to fail with 401 Unauthorized.
+      // Read the real access token from tokenStorage instead.
+      const tokens = tokenStorage.getTokens();
+
       const response = await fetch(`${API_BASE_URL}/invoices`, {
         method:  'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization:  `Bearer ${user.token}`,
+          ...(tokens?.accessToken ? { Authorization: `Bearer ${tokens.accessToken}` } : {}),
         },
         body: JSON.stringify(payload),
       });
@@ -186,6 +215,7 @@ export default function StaffInvoicePage({ user }: StaffInvoicePageProps) {
 
       const newInvoiceFromDB = await response.json();
       setSavedInvoice({ ...frontendInvoice, invoiceNumber: newInvoiceFromDB.invoiceNumber });
+      setIsPersisted(true); // real DB save succeeded — Send Email is now available
       setPreview(true);
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred.');
@@ -199,10 +229,31 @@ export default function StaffInvoicePage({ user }: StaffInvoicePageProps) {
       <div className="min-h-screen bg-gray-50">
         <DemoTopBar user={user} />
         <div className="container mx-auto px-4 py-8">
-          <button onClick={() => setPreview(false)} className="mb-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-gray-700 hover:bg-gray-100">
-            <ArrowLeft className="w-4 h-4" /> Back to Invoice Form
-          </button>
-          <InvoiceGenerator invoice={savedInvoice} />
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <button onClick={() => setPreview(false)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-gray-700 hover:bg-gray-100">
+              <ArrowLeft className="w-4 h-4" /> Back to Invoice Form
+            </button>
+
+            {/* FIX: "Send to Customer" button removed entirely. Staff invoices
+                are always created as DRAFT and held for admin approval —
+                only the admin's Approve action (in the Financial Dashboard)
+                triggers the customer email. This was changed after we found
+                staff could previously bypass the approval workflow entirely
+                by sending the email themselves, which defeated the purpose
+                of having an approval step. Now there is exactly one path:
+                Save → DRAFT → Admin Approves → Email Sent. */}
+            {isPersisted ? (
+              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm">
+                <FileText className="w-4 h-4" />
+                Saved as DRAFT — awaiting admin approval before sending to customer
+              </div>
+            ) : (
+              <span className="text-xs text-gray-400 italic">
+                Preview only — click "Save Invoice" to submit for approval
+              </span>
+            )}
+          </div>
+          <InvoiceGenerator invoice={savedInvoice} isStaff={true} />
         </div>
       </div>
     );
@@ -215,6 +266,7 @@ export default function StaffInvoicePage({ user }: StaffInvoicePageProps) {
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-purple-600 hover:text-purple-700 mb-6">
           <ArrowLeft className="w-5 h-5" /> Back
         </button>
+
 
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Create Staff Invoice</h1>
 
@@ -344,7 +396,7 @@ export default function StaffInvoicePage({ user }: StaffInvoicePageProps) {
 
       {isConfiguratorOpen && (
         <ServiceItemConfigurator
-          onAdd={handleAddItemFromConfigurator}
+          onAddItem={handleAddItemFromConfigurator}
           onClose={() => setIsConfiguratorOpen(false)}
         />
       )}

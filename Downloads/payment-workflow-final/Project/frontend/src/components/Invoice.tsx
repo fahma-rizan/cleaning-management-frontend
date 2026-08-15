@@ -1,16 +1,84 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Download, Loader } from 'lucide-react';
+import { Loader } from 'lucide-react';
 import type { User } from '../types';
-import { useEffect, useState, useRef } from 'react';
-import InvoiceGenerator, { InvoiceData } from './InvoiceGenerator';
-import DemoTopBar from './DemoTopBar';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
-
-
+import { useEffect, useState } from 'react';
+import InvoiceGenerator, { InvoiceData, InvoiceType } from './InvoiceGenerator';
 
 interface InvoiceProps {
   user: User;
+}
+
+// Shape of the invoice as it comes from the MongoDB API
+interface DBInvoice {
+  _id: string;
+  invoiceNumber: string;
+  invoiceType: string;
+  mainCategories: string[];
+  status: string;
+  customer: {
+    userId: string;
+    name: string;
+    email: string;
+    phone: string;
+    address: string;
+  };
+  bookingId: string;
+  serviceItems: Array<{ name: string; price: number; quantity: number }>;
+  discounts: Array<{ description: string; amount: number }>;
+  subTotal: number;
+  totalAmount: number;
+  paidAmount: number;
+  balanceAmount: number;
+  notes: string;
+  createdAt: string;
+}
+
+// FIX: This was the missing piece — the fetched MongoDB document was passed
+// straight to InvoiceGenerator without mapping field names. InvoiceGenerator
+// expects invoice.pricing.total / .paidAmount / .balanceAmount and
+// invoice.service.items — but the raw DB document has totalAmount,
+// paidAmount, balanceAmount, and serviceItems at the TOP level instead.
+// That mismatch is why Total/Paid showed Rs. 0 and the service table was
+// empty — the fields InvoiceGenerator was reading simply didn't exist.
+function mapDBInvoiceToInvoiceData(inv: DBInvoice): InvoiceData {
+  const totalDiscount = (inv.discounts || []).reduce((s, d) => s + d.amount, 0);
+  const created = inv.createdAt ? new Date(inv.createdAt) : new Date();
+
+  return {
+    invoiceNumber:  inv.invoiceNumber,
+    mainCategories: inv.mainCategories || [],
+    invoiceType:    inv.invoiceType as InvoiceType,
+    date:           created.toLocaleDateString(),
+    time:           created.toLocaleTimeString(),
+    bookingId:      inv.bookingId,
+    customer: {
+      name:    inv.customer?.name    || 'N/A',
+      email:   inv.customer?.email   || 'N/A',
+      phone:   inv.customer?.phone   || '',
+      address: inv.customer?.address || '',
+    },
+    service: {
+      name: inv.serviceItems?.[0]?.name || 'Service',
+      date: created.toLocaleDateString(),
+      time: created.toLocaleTimeString(),
+      items: (inv.serviceItems || []).map(item => ({
+        name:     item.name,
+        price:    item.price,
+        quantity: item.quantity || 1,
+      })),
+    },
+    pricing: {
+      subtotal:      inv.subTotal      || 0,
+      discount:      totalDiscount > 0 ? totalDiscount : undefined,
+      total:         inv.totalAmount   || 0,
+      paidAmount:    inv.paidAmount    || 0,
+      balanceAmount: inv.balanceAmount || 0,
+    },
+    paymentMethod: inv.invoiceType === 'COD'     ? 'Cash on Delivery'
+                 : inv.invoiceType === 'ADVANCE'  ? 'Online (PayHere) — Advance'
+                 : 'Online (PayHere)',
+    status: inv.status as InvoiceData['status'],
+  };
 }
 
 export default function Invoice({ user }: InvoiceProps) {
@@ -18,35 +86,23 @@ export default function Invoice({ user }: InvoiceProps) {
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState<InvoiceData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const invoiceRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!bookingId) {
-      navigate('/dashboard');
+      navigate('/admin/financial-dashboard');
       return;
     }
     const fetchInvoice = async () => {
       setLoading(true);
       try {
-        // Attempt to fetch from the backend first
         const response = await fetch(`http://localhost:4000/api/invoices/booking/${bookingId}`);
-        if (response.ok) {
-          const data = await response.json();
-          setInvoice(data);
-        } else {
-          // Fallback to localStorage if not found or on error
-          const storedInvoices = JSON.parse(localStorage.getItem('userInvoices') || '[]');
-          const foundInvoice = storedInvoices.find((inv: InvoiceData) => inv.bookingId === bookingId);
-          if (foundInvoice) {
-            setInvoice(foundInvoice);
-          } else {
-            throw new Error('Invoice not found');
-          }
-        }
+        if (!response.ok) throw new Error('Invoice not found');
+        const data: DBInvoice = await response.json();
+        // FIX: map the raw DB document into the shape InvoiceGenerator expects
+        setInvoice(mapDBInvoiceToInvoiceData(data));
       } catch (error) {
         console.error('Failed to fetch invoice:', error);
-        navigate('/dashboard'); // Redirect if invoice cannot be found
+        setInvoice(null);
       } finally {
         setLoading(false);
       }
@@ -54,53 +110,6 @@ export default function Invoice({ user }: InvoiceProps) {
 
     fetchInvoice();
   }, [bookingId, navigate]);
-
-  const handleDownload = async () => {
-    if (!invoiceRef.current) return;
-    setIsDownloading(true);
-
-    try {
-      const canvas = await html2canvas(invoiceRef.current, {
-        scale: 2, // Higher scale for better quality
-        useCORS: true,
-        backgroundColor: '#ffffff',
-      });
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const canvasWidth = canvas.width;
-      const canvasHeight = canvas.height;
-      const ratio = canvasWidth / canvasHeight;
-      const widthInPdf = pdfWidth;
-      const heightInPdf = widthInPdf / ratio;
-
-      let position = 0;
-      let heightLeft = heightInPdf;
-
-      pdf.addImage(imgData, 'PNG', 0, position, widthInPdf, heightInPdf);
-      heightLeft -= pdfHeight;
-
-      while (heightLeft > 0) {
-        position = heightLeft - heightInPdf;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, widthInPdf, heightInPdf);
-        heightLeft -= pdfHeight;
-      }
-
-      pdf.save(`Invoice-${invoice?.invoiceNumber}.pdf`);
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-    } finally {
-      setIsDownloading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -116,51 +125,22 @@ export default function Invoice({ user }: InvoiceProps) {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-xl mb-4 text-gray-600">Invoice not found.</p>
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-          >
-            Back to Dashboard
-          </button>
         </div>
       </div>
     );
   }
 
+  // FIX: Removed the top action bar entirely (Back button + duplicate
+  // "Download PDF" button). This page is reached via a public link sent
+  // in the customer's email — there's no "back" page to return to, and
+  // the duplicate download button used an old implementation with none
+  // of the oklch color fixes, so it silently failed while the bottom
+  // "Download Invoice (PDF)" button (built into InvoiceGenerator) worked.
+  // One correct download button, at the bottom, is all that's needed.
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
-        <div className="max-w-[210mm] mx-auto mb-4 flex justify-between items-center">
-          <button
-            onClick={() => navigate(-1)} // Go back to the previous page
-            className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors bg-white text-gray-700 hover:bg-gray-100"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </button>
-          <button
-            onClick={handleDownload}
-            disabled={isDownloading}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors bg-green-600 text-white hover:bg-green-700 disabled:bg-green-300"
-          >
-            {isDownloading ? (
-              <>
-                <Loader className="w-4 h-4 animate-spin" />
-                <span>Downloading...</span>
-              </>
-            ) : (
-              <>
-                <Download className="w-4 h-4" />
-                <span>Download PDF</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* We wrap the InvoiceGenerator in a div with a ref to target it for PDF generation */}
-        <div ref={invoiceRef}>
-          <InvoiceGenerator invoice={invoice} />
-        </div>
+        <InvoiceGenerator invoice={invoice} />
       </div>
     </div>
   );
