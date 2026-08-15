@@ -1,66 +1,175 @@
-import { DollarSign, CheckCircle, XCircle, Clock, ClipboardList } from 'lucide-react';
+import { useState, useEffect } from "react";
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip as RechartsTooltip, ResponsiveContainer,
-  PieChart, Pie, Cell,
-} from 'recharts';
+  DollarSign,
+  CheckCircle,
+  XCircle,
+  Clock,
+  ClipboardList,
+} from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
+import { overviewAPI } from "../../lib/api";
 
-// ─── Static data ──────────────────────────────────────────────────────────────
-const revenueData = [
-  { month: 'Jan', revenue: 4200 },
-  { month: 'Feb', revenue: 5000 },
-  { month: 'Mar', revenue: 5800 },
-  { month: 'Apr', revenue: 6400 },
-  { month: 'May', revenue: 7200 },
-  { month: 'Jun', revenue: 7900 },
-  { month: 'Jul', revenue: 8500 },
-];
-
-const serviceData = [
-  { name: 'Deep Cleaning', value: 35, color: '#7C3AED' },
-  { name: 'Regular',       value: 28, color: '#3B82F6' },
-  { name: 'Laundry',       value: 18, color: '#F59E0B' },
-  { name: 'Sofa Cleaning', value: 12, color: '#D946EF' },
-  { name: 'Other',         value: 7,  color: '#64748B' },
-];
-
-const recentBookings = [
-  { id: 'BK-1001', customer: 'Priya Silva',    service: 'Home Cleaning',   date: '2025-02-12', time: '10:00 AM', status: 'confirmed',   amount: 4500 },
-  { id: 'BK-1002', customer: 'Rajesh Kumar',   service: 'Laundry Service', date: '2025-02-12', time: '02:00 PM', status: 'in-progress', amount: 1200 },
-  { id: 'BK-1003', customer: 'Nimal Fernando', service: 'Sofa Cleaning',   date: '2025-02-13', time: '09:00 AM', status: 'pending',     amount: 3500 },
-  { id: 'BK-1004', customer: 'Sarah Johnson',  service: 'Deep Cleaning',   date: '2025-02-13', time: '11:00 AM', status: 'confirmed',   amount: 8000 },
-  { id: 'BK-1005', customer: 'Ahmed Hassan',   service: 'Office Cleaning', date: '2025-02-14', time: '08:00 AM', status: 'pending',     amount: 5000 },
-];
-
-const stats = {
-  todayOrders: 42, todayCompleted: 28,
-  todayCancelled: 4, todayPending: 10, todayRevenue: 125000,
-};
-
-// Status badge colours
 const STATUS_STYLES: Record<string, string> = {
-  confirmed:    'bg-green-100 text-green-700',
-  'in-progress':'bg-blue-100  text-blue-700',
-  pending:      'bg-amber-100 text-amber-700',
+  completed: "bg-green-100 text-green-700",
+  pending: "bg-amber-100 text-amber-700",
+  cancelled: "bg-red-100 text-red-700",
+  "in-progress": "bg-purple-100 text-purple-700",
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
 export default function AdminOverview() {
+  const [stats, setStats] = useState({
+    todayOrders: 0,
+    todayCompleted: 0,
+    todayCancelled: 0,
+    todayPending: 0,
+    todayRevenue: 0,
+  });
+  const [revenueData, setRevenueData] = useState<
+    { month: string; revenue: number }[]
+  >([]);
+  const [serviceData, setServiceData] = useState<
+    { name: string; value: number; color: string }[]
+  >([]);
+  const [recentBookings, setRecentBookings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAllBookings, setShowAllBookings] = useState(false);
+  const [allBookings, setAllBookings] = useState<any[]>([]);
+  const [loadingAll, setLoadingAll] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [isAutoRefreshing, setIsAutoRefreshing] = useState(true);
+
+  // Fetch stats with error handling
+  const fetchStats = async () => {
+    try {
+      const [s, r, sv, rb] = await Promise.all([
+        overviewAPI.getStats(),
+        overviewAPI.getRevenueChart(),
+        overviewAPI.getServiceBreakdown(),
+        overviewAPI.getRecentBookings(),
+      ]);
+      setStats(s);
+      setRevenueData(r);
+      setServiceData(sv);
+      setRecentBookings(rb);
+      setLastUpdated(new Date());
+    } catch (err) {
+      console.error('Failed to fetch overview stats:', err);
+    }
+  };
+
+  // Initial load and set up real-time polling
+  useEffect(() => {
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    let visibilityHandler: (() => void) | null = null;
+
+    const startPolling = () => {
+      if (intervalId) clearInterval(intervalId);
+      // Poll every 30 seconds when tab is visible
+      intervalId = setInterval(() => {
+        fetchStats();
+      }, 30000);
+    };
+
+    const stopPolling = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling();
+        setIsAutoRefreshing(false);
+      } else {
+        setIsAutoRefreshing(true);
+        fetchStats(); // Refresh immediately when tab becomes visible
+        startPolling();
+      }
+    };
+
+    // Initial fetch
+    fetchStats().finally(() => setLoading(false));
+
+    // Set up visibility listener
+    visibilityHandler = handleVisibilityChange;
+    document.addEventListener('visibilitychange', visibilityHandler);
+
+    // Start polling only if tab is initially visible
+    if (!document.hidden) {
+      startPolling();
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      if (visibilityHandler) {
+        document.removeEventListener('visibilitychange', visibilityHandler);
+      }
+    };
+  }, []);
+
+  const handleViewAll = async () => {
+    if (showAllBookings) {
+      setShowAllBookings(false);
+      return;
+    }
+    setLoadingAll(true);
+    try {
+      const data = await fetch(
+        "http://localhost:5000/api/overview/recent-bookings?all=true",
+        {
+          headers: { "Content-Type": "application/json" },
+        },
+      ).then((r) => r.json());
+      setAllBookings(data);
+      setShowAllBookings(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingAll(false);
+    }
+  };
+  if (loading)
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+
   return (
     <div className="space-y-6">
-
-      {/* ── Section heading ── */}
       <div>
         <h2 className="text-2xl font-bold text-gray-800">Today's Orders</h2>
-        <p className="text-gray-500 text-sm mt-1">Summary of daily cleaning activities and revenue</p>
+        <p className="text-gray-500 text-sm mt-1">
+          Summary of daily cleaning activities and revenue
+        </p>
+        {lastUpdated && (
+          <p className="text-gray-400 text-xs mt-2 flex items-center gap-1">
+            <span className={`w-2 h-2 rounded-full ${isAutoRefreshing ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></span>
+            Last updated: {lastUpdated.toLocaleTimeString()} {!isAutoRefreshing && '(paused)'}
+          </p>
+        )}
       </div>
 
-      {/* ── 5 Stat cards ── */}
+      {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-
         <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-purple-500">
           <div className="flex items-center justify-between mb-2">
-            <div className="bg-purple-50 p-2 rounded-lg"><ClipboardList className="w-5 h-5 text-purple-600" /></div>
+            <div className="bg-purple-50 p-2 rounded-lg">
+              <ClipboardList className="w-5 h-5 text-purple-600" />
+            </div>
             <span className="text-xs text-purple-600 font-medium">Today</span>
           </div>
           <div className="text-2xl font-bold mb-1">{stats.todayOrders}</div>
@@ -69,7 +178,9 @@ export default function AdminOverview() {
 
         <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-green-500">
           <div className="flex items-center justify-between mb-2">
-            <div className="bg-green-50 p-2 rounded-lg"><CheckCircle className="w-5 h-5 text-green-600" /></div>
+            <div className="bg-green-50 p-2 rounded-lg">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+            </div>
             <span className="text-xs text-green-600 font-medium">Success</span>
           </div>
           <div className="text-2xl font-bold mb-1">{stats.todayCompleted}</div>
@@ -78,7 +189,9 @@ export default function AdminOverview() {
 
         <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-red-500">
           <div className="flex items-center justify-between mb-2">
-            <div className="bg-red-50 p-2 rounded-lg"><XCircle className="w-5 h-5 text-red-600" /></div>
+            <div className="bg-red-50 p-2 rounded-lg">
+              <XCircle className="w-5 h-5 text-red-600" />
+            </div>
             <span className="text-xs text-red-600 font-medium">Dropped</span>
           </div>
           <div className="text-2xl font-bold mb-1">{stats.todayCancelled}</div>
@@ -87,119 +200,181 @@ export default function AdminOverview() {
 
         <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-amber-500">
           <div className="flex items-center justify-between mb-2">
-            <div className="bg-amber-50 p-2 rounded-lg"><Clock className="w-5 h-5 text-amber-600" /></div>
+            <div className="bg-amber-50 p-2 rounded-lg">
+              <Clock className="w-5 h-5 text-amber-600" />
+            </div>
             <span className="text-xs text-amber-600 font-medium">Waiting</span>
           </div>
           <div className="text-2xl font-bold mb-1">{stats.todayPending}</div>
           <div className="text-sm text-gray-600">Pending Orders</div>
         </div>
 
-        <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-purple-600">
+        <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-blue-500">
           <div className="flex items-center justify-between mb-2">
-            <div className="bg-purple-100 p-2 rounded-lg"><DollarSign className="w-5 h-5 text-purple-700" /></div>
-            <span className="text-xs text-purple-700 font-medium">Revenue</span>
+            <div className="bg-blue-50 p-2 rounded-lg">
+              <DollarSign className="w-5 h-5 text-blue-600" />
+            </div>
+            <span className="text-xs text-blue-600 font-medium">Revenue</span>
           </div>
-          <div className="text-2xl font-bold mb-1 text-purple-900">LKR {stats.todayRevenue.toLocaleString()}</div>
-          <div className="text-sm text-gray-600">Total Revenue</div>
+          <div className="text-2xl font-bold mb-1">
+            Rs {stats.todayRevenue.toLocaleString()}
+          </div>
+          <div className="text-sm text-gray-600">Today's Revenue</div>
         </div>
-
       </div>
 
-      {/* ── Charts ── */}
+      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        {/* Revenue Trend — Area Chart */}
-        <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h2 className="text-lg font-bold text-gray-800 mb-6">Revenue Trend</h2>
-          <div className="h-[300px] w-full">
+        {/* Area Chart */}
+        <div className="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm">
+          <h3 className="text-lg font-bold text-gray-800 mb-4">
+            Revenue Overview
+          </h3>
+          <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <AreaChart data={revenueData}>
                 <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#7C3AED" stopOpacity={0.1} />
-                    <stop offset="95%" stopColor="#7C3AED" stopOpacity={0}   />
+                  <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#7C3AED" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} ticks={[0, 2500, 5000, 7500, 10000]} />
-                <RechartsTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                <Area type="monotone" dataKey="revenue" stroke="#7C3AED" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fill: "#6b7280", fontSize: 12 }}
+                />
+                <YAxis tick={{ fill: "#6b7280", fontSize: 12 }} />
+                <RechartsTooltip />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#7C3AED"
+                  fill="url(#revGrad)"
+                  strokeWidth={2}
+                />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Service Breakdown — Donut */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h2 className="text-lg font-bold text-gray-800 mb-6">Service Breakdown</h2>
-          <div className="h-[200px] w-full">
+        {/* Pie Chart */}
+        <div className="bg-white rounded-xl p-6 shadow-sm">
+          <h3 className="text-lg font-bold text-gray-800 mb-4">
+            Service Breakdown
+          </h3>
+          <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={serviceData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                  {serviceData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                <Pie
+                  data={serviceData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  dataKey="value"
+                >
+                  {serviceData.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
                 </Pie>
+                <RechartsTooltip />
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-6 space-y-3">
-            {serviceData.map((item) => (
-              <div key={item.name} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span className="text-sm text-gray-600">{item.name}</span>
+          <div className="space-y-2 mt-2">
+            {serviceData.map((s, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between text-sm gap-2"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: s.color }}
+                  />
+                  <span className="text-gray-600 truncate text-xs">
+                    {s.name}
+                  </span>
                 </div>
-                <span className="text-sm font-bold text-gray-800">{item.value}%</span>
+                <span className="font-bold text-gray-800 shrink-0">
+                  {s.value}
+                </span>
               </div>
             ))}
           </div>
         </div>
-
       </div>
 
-      {/* ── Recent Bookings Table ── */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-gray-800">Recent Bookings</h2>
-          <button className="text-purple-600 text-sm font-medium hover:underline">View All</button>
+      {/* Recent Bookings Table */}
+      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-gray-800">
+            {showAllBookings
+              ? `All Bookings (${allBookings.length})`
+              : "Recent Bookings"}
+          </h3>
+          <button
+            onClick={handleViewAll}
+            className="text-sm font-semibold text-purple-600 hover:text-purple-800 hover:underline transition-colors"
+          >
+            {loadingAll
+              ? "Loading..."
+              : showAllBookings
+                ? "Show Less"
+                : "View All"}
+          </button>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left   text-xs font-medium text-gray-500 uppercase tracking-wider">Booking ID</th>
-                <th className="px-4 py-3 text-left   text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                <th className="px-4 py-3 text-left   text-xs font-medium text-gray-500 uppercase tracking-wider">Service</th>
-                <th className="px-4 py-3 text-left   text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
-                <th className="px-4 py-3 text-left   text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-right  text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {recentBookings.map((b) => (
-                <tr key={b.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-4 text-sm font-medium text-purple-600">{b.id}</td>
-                  <td className="px-4 py-4 text-sm text-gray-700">{b.customer}</td>
-                  <td className="px-4 py-4 text-sm text-gray-600">{b.service}</td>
-                  <td className="px-4 py-4 text-sm text-gray-600">
-                    <div>{b.date}</div>
-                    <div className="text-xs text-gray-400">{b.time}</div>
-                  </td>
-                  <td className="px-4 py-4">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[b.status] ?? 'bg-gray-100 text-gray-700'}`}>
-                      {b.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4 text-sm text-right font-medium text-gray-900">
-                    LKR {b.amount.toLocaleString()}
-                  </td>
-                </tr>
+        <table className="w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              {[
+                "Booking ID",
+                "Customer",
+                "Service",
+                "Date",
+                "Time",
+                "Status",
+                "Amount",
+              ].map((h) => (
+                <th
+                  key={h}
+                  className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase"
+                >
+                  {h}
+                </th>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {(showAllBookings ? allBookings : recentBookings).map((b) => (
+              <tr key={b._id} className="hover:bg-gray-50">
+                <td className="px-6 py-4 text-sm font-medium text-purple-600">
+                  {b.bookingId}
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-900">
+                  {b.customerName}
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-600">
+                  {b.serviceCategory || b.serviceName || b.serviceType || "—"}
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-600">{b.date}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{b.time}</td>
+                <td className="px-6 py-4">
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-semibold ${STATUS_STYLES[b.status] || "bg-gray-100 text-gray-600"}`}
+                  >
+                    {b.status}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-sm font-semibold">
+                  Rs {b.price?.toLocaleString()}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-
     </div>
   );
 }
