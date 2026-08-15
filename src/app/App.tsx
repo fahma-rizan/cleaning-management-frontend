@@ -50,6 +50,11 @@ import SubmissionSuccess from "./components/staff/SubmissionSuccess"; //staff su
 import LoyaltyPointsSummary from "./components/LoyaltyPointsSummary";
 import CompleteProfile from "./components/auth/CompleteProfile";
 import ComplaintForm from "./components/ComplaintForm";
+import InventoryListPage from "./components/admin/InventoryListPage";
+import AddEditInventoryItem from "./components/admin/AddEditInventoryItem";
+import LowStockAlertsPage from "./components/admin/LowStockAlertsPage";
+import RestockPage from "./components/admin/RestockPage";
+import InventoryReportsPage from "./components/admin/InventoryReportsPage";
 
 function AppLayout() {
   const { user, showProfileModal, setShowProfileModal, theme, handleLogout } =
@@ -355,6 +360,114 @@ export default function App() {
               element={
                 user && user.role === "admin" ? (
                   <AdminDashboard
+                    user={user}
+                    onLogout={handleLogout}
+                    theme={theme}
+                    onToggleTheme={() =>
+                      setTheme(theme === "light" ? "dark" : "light")
+                    }
+                    onProfileClick={() => setShowProfileModal(true)}
+                  />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route
+              path="admin/inventory"
+              element={
+                user && user.role === "admin" ? (
+                  <InventoryListPage
+                    user={user}
+                    onLogout={handleLogout}
+                    theme={theme}
+                    onToggleTheme={() =>
+                      setTheme(theme === "light" ? "dark" : "light")
+                    }
+                    onProfileClick={() => setShowProfileModal(true)}
+                  />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route
+              path="admin/inventory/add"
+              element={
+                user && user.role === "admin" ? (
+                  <AddEditInventoryItem
+                    user={user}
+                    onLogout={handleLogout}
+                    theme={theme}
+                    onToggleTheme={() =>
+                      setTheme(theme === "light" ? "dark" : "light")
+                    }
+                    onProfileClick={() => setShowProfileModal(true)}
+                  />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route
+              path="admin/inventory/edit/:id"
+              element={
+                user && user.role === "admin" ? (
+                  <AddEditInventoryItem
+                    user={user}
+                    onLogout={handleLogout}
+                    theme={theme}
+                    onToggleTheme={() =>
+                      setTheme(theme === "light" ? "dark" : "light")
+                    }
+                    onProfileClick={() => setShowProfileModal(true)}
+                  />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route
+              path="admin/inventory/low-stock"
+              element={
+                user && user.role === "admin" ? (
+                  <LowStockAlertsPage
+                    user={user}
+                    onLogout={handleLogout}
+                    theme={theme}
+                    onToggleTheme={() =>
+                      setTheme(theme === "light" ? "dark" : "light")
+                    }
+                    onProfileClick={() => setShowProfileModal(true)}
+                  />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route
+              path="admin/inventory/restock/:id?"
+              element={
+                user && user.role === "admin" ? (
+                  <RestockPage
+                    user={user}
+                    onLogout={handleLogout}
+                    theme={theme}
+                    onToggleTheme={() =>
+                      setTheme(theme === "light" ? "dark" : "light")
+                    }
+                    onProfileClick={() => setShowProfileModal(true)}
+                  />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route
+              path="admin/inventory/reports"
+              element={
+                user && user.role === "admin" ? (
+                  <InventoryReportsPage
                     user={user}
                     onLogout={handleLogout}
                     theme={theme}

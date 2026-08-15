@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, ShieldCheck, CreditCard,
   PackageOpen, Star, AlertCircle, MapPin,
@@ -74,6 +75,7 @@ const NAV_ITEMS: NavItem[] = [
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
+  const navigate = useNavigate();
   const [activeTab,    setActiveTab]    = useState('overview');
   const [showProfile,  setShowProfile]  = useState(false);
   const [sidebarOpen,  setSidebarOpen]  = useState(false);
@@ -95,6 +97,13 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   const visibleItems = NAV_ITEMS.filter(item => canAccessTab(item.id, user.adminRole));
 
   const handleTabChange = (id: string) => {
+    if (id === 'inventory') {
+      // Inventory Management is its own page flow (list/add/edit/restock/reports),
+      // not a tab rendered inside this dashboard's content area.
+      navigate('/admin/inventory');
+      setSidebarOpen(false);
+      return;
+    }
     setActiveTab(id);
     setSidebarOpen(false); // close sidebar on mobile after nav
   };
@@ -305,7 +314,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
             {activeTab === 'settings'   && canAccessTab('settings',   user.adminRole) && <SystemSettings />}
 
             {/* Tabs owned by other teammates */}
-            {(activeTab === 'payments' || activeTab === 'inventory') && (
+            {activeTab === 'payments' && (
               <div className="flex items-center justify-center min-h-[60vh]">
                 <div className="text-center">
                   <p className="text-gray-400 text-xs uppercase tracking-widest font-bold mb-2">Coming soon</p>
