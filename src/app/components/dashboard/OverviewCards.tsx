@@ -24,6 +24,9 @@ import {
 import { motion } from 'motion/react';
 import { Button } from '../ui/button';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
+import { useEffect, useState } from 'react';
+import { fetchWithAuth } from '../../utils/api';
+import { getTierByName, getNextTier } from '../../lib/loyaltyTiers';
 
 // --- Header & Stats ---
 interface DashboardHeaderProps {
@@ -298,49 +301,65 @@ export const ServiceHistory = () => (
 );
 
 // --- Right Column ---
-export const LoyaltyPointsCard = () => (
-  <div className="bg-white dark:bg-gray-800 rounded-[24px] p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-    <div className="flex flex-col md:flex-row items-center gap-8">
-      <div className="shrink-0">
-        <div className="relative">
-          <div className="w-20 h-20 bg-gradient-to-br from-slate-200 to-slate-400 rounded-3xl flex items-center justify-center shadow-lg border-4 border-white dark:border-gray-700">
-            <Award className="w-10 h-10 text-white drop-shadow-md" />
+export const LoyaltyPointsCard = () => {
+  const [account, setAccount] = useState<{ currentBalance: number; lifetimePoints: number; currentTier: string } | null>(null);
+
+  useEffect(() => {
+    fetchWithAuth('/loyalty/account')
+      .then(res => { if (res && !res.error) setAccount(res); })
+      .catch(() => {});
+  }, []);
+
+  const tier = getTierByName(account?.currentTier);
+  const nextTier = getNextTier(account?.currentTier);
+  const lifetimePoints = account?.lifetimePoints ?? 0;
+  const progress = nextTier ? Math.min(100, Math.round(((lifetimePoints - tier.min) / (nextTier.min - tier.min)) * 100)) : 100;
+  const pointsToNext = nextTier ? Math.max(0, nextTier.min - lifetimePoints) : 0;
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-[24px] p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+      <div className="flex flex-col md:flex-row items-center gap-8">
+        <div className="shrink-0">
+          <div className="relative">
+            <div className={`w-20 h-20 bg-gradient-to-br ${tier.gradient} rounded-3xl flex items-center justify-center shadow-lg border-4 border-white dark:border-gray-700`}>
+              <Award className="w-10 h-10 text-white drop-shadow-md" />
+            </div>
+            <div className="absolute inset-0 bg-slate-400/20 blur-xl rounded-full scale-150 animate-pulse" />
           </div>
-          <div className="absolute inset-0 bg-slate-400/20 blur-xl rounded-full scale-150 animate-pulse" />
-        </div>
-      </div>
-      
-      <div className="flex-1 text-center md:text-left">
-        <h4 className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-1">Silver Member</h4>
-        <div className="flex items-baseline justify-center md:justify-start gap-1 mb-4">
-          <span className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter">1,250</span>
-          <span className="text-sm font-bold text-gray-400">points balance</span>
         </div>
 
-        <div className="space-y-3">
-          <div className="relative h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden max-w-md">
-            <motion.div 
-              initial={{ width: 0 }}
-              animate={{ width: '70%' }}
-              transition={{ duration: 1 }}
-              className="h-full bg-gradient-to-r from-slate-400 to-yellow-500 rounded-full"
-            />
+        <div className="flex-1 text-center md:text-left">
+          <h4 className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-1">{tier.name} Member</h4>
+          <div className="flex items-baseline justify-center md:justify-start gap-1 mb-4">
+            <span className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter">{(account?.currentBalance ?? 0).toLocaleString()}</span>
+            <span className="text-sm font-bold text-gray-400">points balance</span>
           </div>
-          <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-gray-400 max-w-md">
-            <span className="text-blue-600">250 pts to gold</span>
-            <span>70% Progress</span>
+
+          <div className="space-y-3">
+            <div className="relative h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden max-w-md">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${progress}%` }}
+                transition={{ duration: 1 }}
+                className={`h-full bg-gradient-to-r ${tier.gradient} rounded-full`}
+              />
+            </div>
+            <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-gray-400 max-w-md">
+              <span className="text-blue-600">{nextTier ? `${pointsToNext} pts to ${nextTier.name.toLowerCase()}` : 'Top tier reached'}</span>
+              <span>{progress}% Progress</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="shrink-0">
-        <Link to="/loyalty-summary" className="px-6 py-3 bg-blue-50 dark:bg-blue-900/10 text-blue-600 rounded-xl font-black text-xs hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors flex items-center gap-2 group">
-          View Details <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-        </Link>
+        <div className="shrink-0">
+          <Link to="/loyalty" className="px-6 py-3 bg-blue-50 dark:bg-blue-900/10 text-blue-600 rounded-xl font-black text-xs hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors flex items-center gap-2 group">
+            View Details <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+          </Link>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export const PromoBanner = () => (
   <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-[24px] p-6 text-white relative overflow-hidden group shadow-lg">

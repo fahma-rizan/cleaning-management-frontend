@@ -41,13 +41,11 @@ import UserProfile from "./components/UserProfile";
 import ProfileModal from "./components/ProfileModal";
 import SecuritySettings from "./components/SecuritySettings";
 import LoyaltyPage from "./components/LoyaltyPage";
-import LoyaltyPointsSystem from "./components/loyalty/LoyaltyPointsSystem";
 import VerificationSuccess from "./components/VerificationSuccess";
 import StaffPerformance from "./components/StaffPerformance"; //staff performance page
 import GPSTracking from "./components/GPSTracking"; //gps tracking page
 import CompleteServiceForm from "./components/staff/CompleteServiceForm"; //staff complete service form page
 import SubmissionSuccess from "./components/staff/SubmissionSuccess"; //staff submission success page
-import LoyaltyPointsSummary from "./components/LoyaltyPointsSummary";
 import CompleteProfile from "./components/auth/CompleteProfile";
 import ComplaintForm from "./components/ComplaintForm";
 import InventoryListPage from "./components/admin/InventoryListPage";
@@ -642,38 +640,15 @@ export default function App() {
                 )
               }
             />
+            {/* These two used to render separate, static/mock loyalty pages —
+                both are now superseded by the real, API-wired /loyalty page. */}
             <Route
               path="loyalty-points"
-              element={
-                user && user.role === "customer" ? (
-                  <LoyaltyPointsSystem
-                    onLogout={handleLogout}
-                    theme={theme}
-                    onToggleTheme={() =>
-                      setTheme(theme === "light" ? "dark" : "light")
-                    }
-                  />
-                ) : (
-                  <Navigate to="/login" replace />
-                )
-              }
+              element={<Navigate to="/loyalty" replace />}
             />
             <Route
               path="loyalty-summary"
-              element={
-                user && user.role === "customer" ? (
-                  <LoyaltyPointsSummary
-                    user={user}
-                    onLogout={handleLogout}
-                    theme={theme}
-                    onToggleTheme={() =>
-                      setTheme(theme === "light" ? "dark" : "light")
-                    }
-                  />
-                ) : (
-                  <Navigate to="/login" replace />
-                )
-              }
+              element={<Navigate to="/loyalty" replace />}
             />
           </Route>
         </Routes>
