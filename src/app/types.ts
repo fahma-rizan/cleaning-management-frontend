@@ -6,7 +6,8 @@ export interface User {
   adminRole?: 'Super Admin' | 'Main Admin' | 'Operations Manager' | 'Customer Support';
   verified: boolean;
   loyaltyPoints?: number;
-  badge?: 'Silver' | 'Gold' | 'Platinum';
+  lifetimePoints?: number;
+  badge?: 'Bronze' | 'Silver' | 'Gold' | 'Platinum';
   requiresPasswordChange?: boolean;
   image?: string;
 }

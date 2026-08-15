@@ -51,6 +51,7 @@ import LoyaltyPointsSummary from "./components/LoyaltyPointsSummary";
 import CompleteProfile from "./components/auth/CompleteProfile";
 import ComplaintForm from "./components/ComplaintForm";
 import InventoryListPage from "./components/admin/InventoryListPage";
+import InventoryManagementPage from "./components/admin/InventoryManagementPage";
 import AddEditInventoryItem from "./components/admin/AddEditInventoryItem";
 import LowStockAlertsPage from "./components/admin/LowStockAlertsPage";
 import RestockPage from "./components/admin/RestockPage";
@@ -377,7 +378,7 @@ export default function App() {
               path="admin/inventory"
               element={
                 user && user.role === "admin" ? (
-                  <InventoryListPage
+                  <InventoryManagementPage
                     user={user}
                     onLogout={handleLogout}
                     theme={theme}
