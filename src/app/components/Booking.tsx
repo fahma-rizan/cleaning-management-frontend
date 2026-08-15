@@ -110,7 +110,13 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
     carpetCount: 1,
     carpetSquareFeet: 50,
     mattressSquareFeet: 50,
+    // Promo code
+    promoCode: '',
+    promoDiscount: 0,
+    promoMessage: '',
+    promoApplied: false,
   });
+  const [applyingPromo, setApplyingPromo] = useState(false);
 
   const isLaundryService = serviceId === '2';
   const isCurtainService = serviceId === '4';
@@ -245,33 +251,70 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
     return Object.keys(errors).length === 0;
   };
 
+  const handleApplyPromo = async () => {
+    if (!bookingData.promoCode.trim()) return;
+    setApplyingPromo(true);
+    try {
+      const data = await fetchWithAuth('/offers/validate', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: bookingData.promoCode,
+          serviceId: Number(serviceId),
+          orderAmount: estimatedPrice,
+        }),
+      });
+
+      if (data?.offer) {
+        handleInputChange('promoDiscount', data.offer.discountAmount || 0);
+        handleInputChange('promoApplied', true);
+        handleInputChange(
+          'promoMessage',
+          `✅ Code applied! You save LKR ${(data.offer.discountAmount || 0).toLocaleString()}`
+        );
+      } else {
+        handleInputChange('promoDiscount', 0);
+        handleInputChange('promoApplied', false);
+        handleInputChange('promoMessage', `❌ ${data?.message || 'Invalid promo code'}`);
+      }
+    } catch (err) {
+      handleInputChange('promoDiscount', 0);
+      handleInputChange('promoApplied', false);
+      handleInputChange('promoMessage', '❌ Failed to validate promo code. Please try again.');
+    } finally {
+      setApplyingPromo(false);
+    }
+  };
+
+  const finalPrice = Math.max(0, estimatedPrice - bookingData.promoDiscount);
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
     const serviceType = serviceMapping[serviceId || '1'] || 'home cleaning';
     const mainServiceType = mainServiceTypeMapping[serviceId || '1'] || 'Home/Office Cleaning';
     const serviceCategory = serviceCategoryMapping[serviceId || '1'] || 'General Cleaning';
-    
+
     // For curtain cleaning, determine the specific sub-service based on selected type
     let finalServiceCategory = serviceCategory;
     if (isCurtainService) {
       const selectedType = curtainServiceTypes.find(t => t.id === bookingData.curtainServiceType);
       finalServiceCategory = selectedType?.name || 'Curtain Cleaning';
     }
-    
+
     const booking = {
       ...bookingData,
       serviceId,
-      serviceType: mainServiceType, 
+      serviceType: mainServiceType,
       serviceCategory: finalServiceCategory,
       serviceName: serviceType,
       userId: user.id,
-      price: estimatedPrice,
+      price: finalPrice,
+      originalPrice: estimatedPrice,
       bookingId: 'BK-' + Date.now(),
       status: 'pending',
       timestamp: new Date().toISOString(),
     };
-    
+
     // Only store current booking temporarily — saved to MongoDB after payment
     localStorage.setItem('currentBooking', JSON.stringify(booking));
     navigate('/payment');
@@ -1044,6 +1087,33 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
               </div>
             )}
 
+            {/* Promo Code */}
+            <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+              <h2 className="text-xl font-bold mb-4 dark:text-white">Have a Promo Code?</h2>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  value={bookingData.promoCode}
+                  onChange={(e) => handleInputChange('promoCode', e.target.value.toUpperCase())}
+                  placeholder="Enter promo code e.g. WELCOME20"
+                  className="flex-1 px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white uppercase tracking-wide"
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyPromo}
+                  disabled={applyingPromo || !bookingData.promoCode.trim()}
+                  className="px-8 py-4 bg-purple-600 text-white rounded-2xl font-bold hover:bg-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {applyingPromo ? 'Checking...' : 'Apply'}
+                </button>
+              </div>
+              {bookingData.promoMessage && (
+                <p className={`mt-3 text-sm font-medium ${bookingData.promoApplied ? 'text-green-600' : 'text-red-600'}`}>
+                  {bookingData.promoMessage}
+                </p>
+              )}
+            </div>
+
             {/* Price Summary & Submit */}
             <div className="bg-gray-900 dark:bg-purple-900 rounded-3xl p-8 text-white shadow-xl">
               {Object.keys(formErrors).length > 0 && (
@@ -1058,11 +1128,25 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
               )}
               <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                 <div>
-                  <h3 className="text-purple-300 font-bold uppercase tracking-widest text-xs mb-1">Estimated Total</h3>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-black">LKR {estimatedPrice.toLocaleString()}</span>
-                    <span className="text-purple-400 text-sm">inc. taxes</span>
-                  </div>
+                  <h3 className="text-purple-300 font-bold uppercase tracking-widest text-xs mb-1">
+                    {bookingData.promoApplied ? 'Price Summary' : 'Estimated Total'}
+                  </h3>
+                  {bookingData.promoApplied ? (
+                    <>
+                      <div className="text-purple-300 text-sm">
+                        Original: <span className="line-through">LKR {estimatedPrice.toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-4xl font-black">LKR {finalPrice.toLocaleString()}</span>
+                        <span className="text-purple-400 text-sm">inc. taxes</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-4xl font-black">LKR {estimatedPrice.toLocaleString()}</span>
+                      <span className="text-purple-400 text-sm">inc. taxes</span>
+                    </div>
+                  )}
                 </div>
                 <button
                   type="submit"

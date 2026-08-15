@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Tag, TrendingDown, Clock, Gift, Zap } from 'lucide-react';
+import { fetchWithAuth } from '../utils/api';
 
 interface Offer {
   id: number | string;
@@ -13,32 +14,48 @@ interface Offer {
   isActive?: boolean;
 }
 
+const toDisplayOffer = (offer: any, type: Offer['type'] = 'seasonal'): Offer => ({
+  id: offer._id || offer.id,
+  title: offer.title,
+  description: offer.description,
+  discount: offer.discountType === 'percentage'
+    ? `${offer.discountValue}%`
+    : `LKR ${offer.discountValue}`,
+  code: offer.code || 'N/A',
+  validUntil: offer.validTo || offer.validUntil || 'Ongoing',
+  type,
+  minAmount: offer.minAmount || offer.minOrderAmount || undefined,
+  isActive: offer.isActive,
+});
+
 export default function OffersDiscounts() {
   const [offers, setOffers] = useState<Offer[]>([]);
 
   useEffect(() => {
-    // Load offers from localStorage (set by admin)
-    const adminOffers = JSON.parse(localStorage.getItem('specialOffers') || '[]');
+    const loadOffers = async () => {
+      // 1) Try the live backend first — this is what an admin manages centrally.
+      try {
+        const data = await fetchWithAuth('/offers');
+        if (Array.isArray(data) && data.length > 0) {
+          setOffers(data.map((o: any) => toDisplayOffer(o)));
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to load live offers, falling back:', err);
+      }
 
-    if (adminOffers.length > 0) {
-      // Convert admin offers to display format
-      const displayOffers = adminOffers
-        .filter((offer: any) => offer.isActive)
-        .map((offer: any) => ({
-          id: offer.id,
-          title: offer.title,
-          description: offer.description,
-          discount: offer.discountType === 'percentage'
-            ? `${offer.discountValue}%`
-            : `LKR ${offer.discountValue}`,
-          code: offer.code || 'N/A',
-          validUntil: offer.validTo,
-          type: 'seasonal' as const,
-          isActive: offer.isActive
-        }));
-      setOffers(displayOffers);
-    } else {
-      // Fallback to default offers if admin hasn't created any
+      // 2) Fall back to offers saved locally by the admin (older localStorage flow).
+      const adminOffers = JSON.parse(localStorage.getItem('specialOffers') || '[]');
+      if (adminOffers.length > 0) {
+        setOffers(
+          adminOffers
+            .filter((offer: any) => offer.isActive)
+            .map((offer: any) => toDisplayOffer(offer))
+        );
+        return;
+      }
+
+      // 3) Last resort — static defaults so the page is never empty.
       setOffers([
         {
           id: 1,
@@ -68,7 +85,9 @@ export default function OffersDiscounts() {
           type: 'loyalty',
         },
       ]);
-    }
+    };
+
+    loadOffers();
   }, []);
 
   const getOfferIcon = (type: string) => {

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Minus, Trash2, ShoppingCart } from 'lucide-react';
+import { fetchWithAuth } from '../utils/api';
 
 interface GarmentItem {
   id: string;
@@ -19,35 +20,68 @@ interface WashingPressingPriceListProps {
   theme?: 'light' | 'dark';
 }
 
+// Fallback data — used only if the live price list fails to load, so the
+// booking flow never breaks even when the backend is unreachable.
+const FALLBACK_GARMENTS: GarmentItem[] = [
+  // Regular Clothing with both Fold & Hang options
+  { id: 'shirt', name: 'SHIRT', foldPrice: 270, hangPrice: 370, category: 'Regular Clothing' },
+  { id: 't-shirt', name: 'T-SHIRT', foldPrice: 220, hangPrice: 320, category: 'Regular Clothing' },
+  { id: 'thobe', name: 'THOBE', foldPrice: 370, hangPrice: 470, category: 'Regular Clothing' },
+  { id: 'kurta', name: 'KURTA', foldPrice: 320, hangPrice: 420, category: 'Regular Clothing' },
+  { id: 'trouser', name: 'TROUSER', foldPrice: 320, hangPrice: 420, category: 'Regular Clothing' },
+  { id: 'shorts', name: 'SHORTS', foldPrice: 270, hangPrice: 370, category: 'Regular Clothing' },
+  { id: 'vset', name: 'VSET', foldPrice: 170, hangPrice: 270, category: 'Regular Clothing' },
+
+  // Women's Wear with both options
+  { id: 'blouse', name: 'BLOUSE', foldPrice: 270, hangPrice: 370, category: "Women's Wear" },
+  { id: 'dress-short', name: 'DRESS (SHORT)', foldPrice: 320, hangPrice: 420, category: "Women's Wear" },
+  { id: 'dress-long', name: 'DRESS (LONG)', foldPrice: 420, hangPrice: 520, category: "Women's Wear" },
+  { id: 'salwar-top', name: 'SALWAR (TOP)', foldPrice: 320, hangPrice: 420, category: "Women's Wear" },
+  { id: 'salwar-full', name: 'SALWAR (FULL SET)', foldPrice: 420, hangPrice: 520, category: "Women's Wear" },
+  { id: 'skirts', name: 'SKIRTS', foldPrice: 320, hangPrice: 420, category: "Women's Wear" },
+
+  // Traditional Wear
+  { id: 'sarong', name: 'SARONG', foldPrice: 420, hangPrice: 520, category: 'Traditional Wear' },
+
+  // Home Textiles (fold only)
+  { id: 'pillow-cases', name: 'PILLOW CASES', foldPrice: 170, category: 'Home Textiles' },
+  { id: 'bedsheets', name: 'BEDSHEETS', foldPrice: 350, category: 'Home Textiles' },
+  { id: 'bathrobe', name: 'BATHROBE', foldPrice: 650, category: 'Home Textiles' },
+];
+
 export default function WashingPressingPriceList({ onTotalChange, theme = 'light' }: WashingPressingPriceListProps) {
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
+  const [garments, setGarments] = useState<GarmentItem[]>(FALLBACK_GARMENTS);
+  const [loadingPrices, setLoadingPrices] = useState(true);
 
-  const garments: GarmentItem[] = [
-    // Regular Clothing with both Fold & Hang options
-    { id: 'shirt', name: 'SHIRT', foldPrice: 270, hangPrice: 370, category: 'Regular Clothing' },
-    { id: 't-shirt', name: 'T-SHIRT', foldPrice: 220, hangPrice: 320, category: 'Regular Clothing' },
-    { id: 'thobe', name: 'THOBE', foldPrice: 370, hangPrice: 470, category: 'Regular Clothing' },
-    { id: 'kurta', name: 'KURTA', foldPrice: 320, hangPrice: 420, category: 'Regular Clothing' },
-    { id: 'trouser', name: 'TROUSER', foldPrice: 320, hangPrice: 420, category: 'Regular Clothing' },
-    { id: 'shorts', name: 'SHORTS', foldPrice: 270, hangPrice: 370, category: 'Regular Clothing' },
-    { id: 'vset', name: 'VSET', foldPrice: 170, hangPrice: 270, category: 'Regular Clothing' },
-    
-    // Women's Wear with both options
-    { id: 'blouse', name: 'BLOUSE', foldPrice: 270, hangPrice: 370, category: "Women's Wear" },
-    { id: 'dress-short', name: 'DRESS (SHORT)', foldPrice: 320, hangPrice: 420, category: "Women's Wear" },
-    { id: 'dress-long', name: 'DRESS (LONG)', foldPrice: 420, hangPrice: 520, category: "Women's Wear" },
-    { id: 'salwar-top', name: 'SALWAR (TOP)', foldPrice: 320, hangPrice: 420, category: "Women's Wear" },
-    { id: 'salwar-full', name: 'SALWAR (FULL SET)', foldPrice: 420, hangPrice: 520, category: "Women's Wear" },
-    { id: 'skirts', name: 'SKIRTS', foldPrice: 320, hangPrice: 420, category: "Women's Wear" },
-    
-    // Traditional Wear
-    { id: 'sarong', name: 'SARONG', foldPrice: 420, hangPrice: 520, category: 'Traditional Wear' },
-    
-    // Home Textiles (fold only)
-    { id: 'pillow-cases', name: 'PILLOW CASES', foldPrice: 170, category: 'Home Textiles' },
-    { id: 'bedsheets', name: 'BEDSHEETS', foldPrice: 350, category: 'Home Textiles' },
-    { id: 'bathrobe', name: 'BATHROBE', foldPrice: 650, category: 'Home Textiles' },
-  ];
+  useEffect(() => {
+    const fetchPrices = async () => {
+      try {
+        const data = await fetchWithAuth('/pricelists/10');
+        const groups = data?.priceList?.pricing?.groups;
+        if (!Array.isArray(groups)) throw new Error('Unexpected price list shape');
+
+        const items: GarmentItem[] = [];
+        groups.forEach((group: any) => {
+          (group.items || []).forEach((item: any) => {
+            items.push({
+              id: item.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+              name: item.name.toUpperCase(),
+              foldPrice: item.foldPrice ?? item.price,
+              hangPrice: item.hangPrice,
+              category: group.label,
+            });
+          });
+        });
+        if (items.length > 0) setGarments(items);
+      } catch (err) {
+        console.error('Failed to load live washing & pressing prices, using fallback:', err);
+      } finally {
+        setLoadingPrices(false);
+      }
+    };
+    fetchPrices();
+  }, []);
 
   const handleAddItem = (garment: GarmentItem, type: 'fold' | 'hang' = 'fold') => {
     const existingItem = selectedItems.find(item => item.id === garment.id);
@@ -140,6 +174,10 @@ export default function WashingPressingPriceList({ onTotalChange, theme = 'light
         <h2 className="text-3xl mb-2 font-bold">WASHING & PRESSING PRICE LIST</h2>
         <p className="text-purple-100">Select garments, choose fold or hang option, and specify quantities</p>
       </div>
+
+      {loadingPrices && (
+        <div className="text-center text-purple-600 dark:text-purple-400 text-sm">Loading latest prices...</div>
+      )}
 
       {/* Garment Selection */}
       {Object.entries(groupedGarments).map(([category, items]) => (
