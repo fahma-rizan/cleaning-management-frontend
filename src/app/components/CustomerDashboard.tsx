@@ -20,6 +20,8 @@ import {
   KeyRound,
   ChevronRight,
   MessageSquare,
+  User as UserIcon,
+  Settings,
 } from "lucide-react";
 import LoyaltyManagement from "./LoyaltyManagement";
 import SummaryPage from "./loyalty/SummaryPage";
@@ -101,7 +103,10 @@ export default function CustomerDashboard({
   const sidebarItems = [
     { id: "overview", name: "Overview", icon: LayoutDashboard },
     { id: "bookings", name: "My Bookings", icon: ClipboardList },
+    { id: "loyalty-link", name: "Loyalty Points", icon: Award, link: "/loyalty" },
     { id: "notifications", name: "Notifications", icon: Bell },
+    { id: "profile-link", name: "My Profile", icon: UserIcon, link: "/profile" },
+    { id: "settings-link", name: "Settings", icon: Settings, link: "/security" },
   ];
 
   const timeSlots = [
