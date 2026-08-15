@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Minus, Trash2, ShoppingCart } from 'lucide-react';
+import { fetchWithAuth } from '../utils/api';
 
 interface GarmentItem {
   id: string;
@@ -17,44 +18,76 @@ interface DryCleaningPriceListProps {
   theme?: 'light' | 'dark';
 }
 
+// Fallback data — used only if the live price list fails to load, so the
+// booking flow never breaks even when the backend is unreachable.
+const FALLBACK_GARMENTS: GarmentItem[] = [
+  // Regular Clothing
+  { id: 'shirt', name: 'SHIRT', price: 400, category: 'Regular Clothing' },
+  { id: 't-shirt', name: 'T-SHIRT', price: 350, category: 'Regular Clothing' },
+  { id: 'thobe', name: 'THOBE', price: 550, category: 'Regular Clothing' },
+  { id: 'kurta', name: 'KURTA', price: 500, category: 'Regular Clothing' },
+  { id: 'trouser', name: 'TROUSER', price: 450, category: 'Regular Clothing' },
+  { id: 'shorts', name: 'SHORTS', price: 400, category: 'Regular Clothing' },
+
+  // Formal Wear
+  { id: 'blazer', name: 'BLAZER', price: 700, category: 'Formal Wear' },
+  { id: 'two-piece-suit', name: 'TWO PIECE SUIT', price: 850, category: 'Formal Wear' },
+  { id: 'three-piece-suit', name: 'THREE PIECE SUIT', price: 1250, category: 'Formal Wear' },
+
+  // Women's Wear
+  { id: 'blouse', name: 'BLOUSE', price: 300, category: "Women's Wear" },
+  { id: 'dress-short', name: 'DRESS (SHORT)', price: 500, category: "Women's Wear" },
+  { id: 'dress-long', name: 'DRESS (LONG)', price: 600, category: "Women's Wear" },
+  { id: 'salwar-top', name: 'SALWAR (TOP)', price: 500, category: "Women's Wear" },
+  { id: 'salwar-full', name: 'SALWAR (FULL SET)', price: 700, category: "Women's Wear" },
+  { id: 'saree', name: 'SAREE', price: 900, category: "Women's Wear" },
+  { id: 'special-saree', name: 'SPECIAL WORK SAREE', price: 1250, category: "Women's Wear" },
+  { id: 'skirts', name: 'SKIRTS', price: 450, category: "Women's Wear" },
+  { id: 'special-salwar', name: 'SPECIAL WORK SALWAR', price: 1250, category: "Women's Wear" },
+
+  // Traditional & Special
+  { id: 'dhoti', name: 'DHOTI', price: 450, category: 'Traditional Wear' },
+  { id: 'bridal-dress', name: 'BRIDAL DRESS/LEHENGA', price: 3500, category: 'Special Occasion' },
+
+  // Winter Wear
+  { id: 'sweaters', name: 'SWEATERS', price: 650, category: 'Winter Wear' },
+  { id: 'winter-jacket', name: 'WINTER JACKET', price: 1000, category: 'Winter Wear' },
+  { id: 'shawl', name: 'SHAWL', price: 175, category: 'Winter Wear' },
+  { id: 'cloak', name: 'CLOAK', price: 500, category: 'Winter Wear' },
+];
+
 export default function DryCleaningPriceList({ onTotalChange, theme = 'light' }: DryCleaningPriceListProps) {
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
+  const [garments, setGarments] = useState<GarmentItem[]>(FALLBACK_GARMENTS);
+  const [loadingPrices, setLoadingPrices] = useState(true);
 
-  const garments: GarmentItem[] = [
-    // Regular Clothing
-    { id: 'shirt', name: 'SHIRT', price: 400, category: 'Regular Clothing' },
-    { id: 't-shirt', name: 'T-SHIRT', price: 350, category: 'Regular Clothing' },
-    { id: 'thobe', name: 'THOBE', price: 550, category: 'Regular Clothing' },
-    { id: 'kurta', name: 'KURTA', price: 500, category: 'Regular Clothing' },
-    { id: 'trouser', name: 'TROUSER', price: 450, category: 'Regular Clothing' },
-    { id: 'shorts', name: 'SHORTS', price: 400, category: 'Regular Clothing' },
-    
-    // Formal Wear
-    { id: 'blazer', name: 'BLAZER', price: 700, category: 'Formal Wear' },
-    { id: 'two-piece-suit', name: 'TWO PIECE SUIT', price: 850, category: 'Formal Wear' },
-    { id: 'three-piece-suit', name: 'THREE PIECE SUIT', price: 1250, category: 'Formal Wear' },
-    
-    // Women's Wear
-    { id: 'blouse', name: 'BLOUSE', price: 300, category: "Women's Wear" },
-    { id: 'dress-short', name: 'DRESS (SHORT)', price: 500, category: "Women's Wear" },
-    { id: 'dress-long', name: 'DRESS (LONG)', price: 600, category: "Women's Wear" },
-    { id: 'salwar-top', name: 'SALWAR (TOP)', price: 500, category: "Women's Wear" },
-    { id: 'salwar-full', name: 'SALWAR (FULL SET)', price: 700, category: "Women's Wear" },
-    { id: 'saree', name: 'SAREE', price: 900, category: "Women's Wear" },
-    { id: 'special-saree', name: 'SPECIAL WORK SAREE', price: 1250, category: "Women's Wear" },
-    { id: 'skirts', name: 'SKIRTS', price: 450, category: "Women's Wear" },
-    { id: 'special-salwar', name: 'SPECIAL WORK SALWAR', price: 1250, category: "Women's Wear" },
-    
-    // Traditional & Special
-    { id: 'dhoti', name: 'DHOTI', price: 450, category: 'Traditional Wear' },
-    { id: 'bridal-dress', name: 'BRIDAL DRESS/LEHENGA', price: 3500, category: 'Special Occasion' },
-    
-    // Winter Wear
-    { id: 'sweaters', name: 'SWEATERS', price: 650, category: 'Winter Wear' },
-    { id: 'winter-jacket', name: 'WINTER JACKET', price: 1000, category: 'Winter Wear' },
-    { id: 'shawl', name: 'SHAWL', price: 175, category: 'Winter Wear' },
-    { id: 'cloak', name: 'CLOAK', price: 500, category: 'Winter Wear' },
-  ];
+  useEffect(() => {
+    const fetchPrices = async () => {
+      try {
+        const data = await fetchWithAuth('/pricelists/9');
+        const groups = data?.priceList?.pricing?.groups;
+        if (!Array.isArray(groups)) throw new Error('Unexpected price list shape');
+
+        const items: GarmentItem[] = [];
+        groups.forEach((group: any) => {
+          (group.items || []).forEach((item: any) => {
+            items.push({
+              id: item.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+              name: item.name.toUpperCase(),
+              price: item.price,
+              category: group.label,
+            });
+          });
+        });
+        if (items.length > 0) setGarments(items);
+      } catch (err) {
+        console.error('Failed to load live dry cleaning prices, using fallback:', err);
+      } finally {
+        setLoadingPrices(false);
+      }
+    };
+    fetchPrices();
+  }, []);
 
   const handleAddItem = (garment: GarmentItem) => {
     const existingItem = selectedItems.find(item => item.id === garment.id);
@@ -128,6 +161,10 @@ export default function DryCleaningPriceList({ onTotalChange, theme = 'light' }:
         <h2 className="text-3xl mb-2 font-bold">DRY CLEANING PRICE LIST</h2>
         <p className="text-purple-100">Select garments and specify quantities for your dry cleaning service</p>
       </div>
+
+      {loadingPrices && (
+        <div className="text-center text-purple-600 dark:text-purple-400 text-sm">Loading latest prices...</div>
+      )}
 
       {/* Garment Selection */}
       {Object.entries(groupedGarments).map(([category, items]) => (
