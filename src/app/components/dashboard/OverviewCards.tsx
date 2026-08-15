@@ -34,9 +34,12 @@ interface DashboardHeaderProps {
   totalBookings: number;
   activeServices: number;
   nextAppointment: string;
+  loyaltyPoints?: number;
+  loyaltyTier?: string;
 }
 
-export const DashboardHeader = ({ name, totalBookings, activeServices, nextAppointment }: DashboardHeaderProps) => {
+export const DashboardHeader = ({ name, totalBookings, activeServices, nextAppointment, loyaltyPoints = 0, loyaltyTier = 'Bronze' }: DashboardHeaderProps) => {
+  const tierLabel = loyaltyTier.charAt(0).toUpperCase() + loyaltyTier.slice(1).toLowerCase();
   const date = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -64,7 +67,7 @@ export const DashboardHeader = ({ name, totalBookings, activeServices, nextAppoi
         {[
           { label: 'Total Bookings',    value: String(totalBookings),  icon: Calendar,     color: 'blue' },
           { label: 'Active Services',   value: String(activeServices), icon: CheckCircle2, color: 'emerald' },
-          { label: 'Loyalty Points',    value: '1,250',                icon: Award,        color: 'purple', badge: true },
+          { label: 'Loyalty Points',    value: loyaltyPoints.toLocaleString(), icon: Award, color: 'purple', badge: true },
           { label: 'Next Appointment',  value: nextAppointment,        icon: Clock,        color: 'amber' },
         ].map((stat, i) => (
           <motion.div 
@@ -82,7 +85,7 @@ export const DashboardHeader = ({ name, totalBookings, activeServices, nextAppoi
               <div className="flex items-center gap-2">
                 <span className="text-2xl font-black text-gray-900 dark:text-white tracking-tighter">{stat.value}</span>
                 {stat.badge && (
-                  <div className="px-1.5 py-0.5 bg-slate-100 dark:bg-gray-700 rounded-md text-[8px] font-black text-slate-500 uppercase tracking-tighter">Silver</div>
+                  <div className="px-1.5 py-0.5 bg-slate-100 dark:bg-gray-700 rounded-md text-[8px] font-black text-slate-500 uppercase tracking-tighter">{tierLabel}</div>
                 )}
               </div>
             </div>

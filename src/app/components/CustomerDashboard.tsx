@@ -96,6 +96,7 @@ export default function CustomerDashboard({
   );
   const [loyaltySubTab, setLoyaltySubTab] = useState("summary");
   const [showRedemption, setShowRedemption] = useState(false);
+  const [loyaltyAccount, setLoyaltyAccount] = useState<{ currentBalance: number; currentTier: string } | null>(null);
 
   const sidebarItems = [
     { id: "overview", name: "Overview", icon: LayoutDashboard },
@@ -130,6 +131,10 @@ export default function CustomerDashboard({
       }
     };
     loadBookings();
+
+    fetchWithAuth('/loyalty/account')
+      .then((res) => { if (res && !res.error) setLoyaltyAccount(res); })
+      .catch(() => {});
   }, []);
 
   // Converts "9:00AM - 11:00AM" → minutes from midnight, for time-slot sorting
@@ -292,6 +297,8 @@ export default function CustomerDashboard({
           totalBookings={totalBookings}
           activeServices={activeServices}
           nextAppointment={nextAppointment}
+          loyaltyPoints={loyaltyAccount?.currentBalance ?? user.loyaltyPoints ?? 0}
+          loyaltyTier={loyaltyAccount?.currentTier ?? user.badge ?? 'Bronze'}
         />
 
         <div className="flex flex-col gap-6">
