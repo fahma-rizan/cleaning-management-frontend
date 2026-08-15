@@ -8222,8 +8222,6 @@ body {
   }
 }
 
-@charset "UTF-8";
-
 /* npm-modules:https://esm.sh/react-datepicker/dist/react-datepicker.css */
 .react-datepicker__navigation-icon::before,
 .react-datepicker__year-read-view--down-arrow,
