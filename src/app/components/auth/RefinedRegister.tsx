@@ -32,7 +32,14 @@ export default function RefinedRegister() {
 
   const validate = () => {
     const errors: Record<string, string> = {};
-    if (!formData.fullName.trim()) errors.fullName = "This field is required";
+    const trimmedName = formData.fullName.trim().replace(/\s+/g, ' ');
+    if (!trimmedName) {
+      errors.fullName = "This field is required";
+    } else if (!trimmedName.includes(' ')) {
+      // Backend requires firstName AND lastName separately — a single word
+      // can't be split, so catch this here instead of a confusing 400 later.
+      errors.fullName = "Please enter your first and last name";
+    }
     if (!formData.email) {
       errors.email = "This field is required";
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
