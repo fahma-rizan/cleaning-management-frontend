@@ -133,7 +133,7 @@ export default function StaffFirstLogin() {
           <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#6D28D9] flex items-center justify-center mb-4 text-white shadow-lg shadow-purple-200">
             <Key size={28} />
           </div>
-          <h2 className="text-20px font-semibold text-[#111827]">First Time Login</h2>
+          <h2 className="text-[20px] font-semibold text-[#111827]">First Time Login</h2>
           <p className="text-sm text-[#6B7280] mt-1 text-center max-w-sm">
             Welcome! Please set a new password to secure your account
           </p>

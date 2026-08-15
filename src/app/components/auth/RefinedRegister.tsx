@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Mail, Phone, Lock, Eye, EyeOff, CheckSquare, Square } from 'lucide-react';
+import { User, Mail, Phone, Lock, Eye, EyeOff } from 'lucide-react';
 import { BrandHeader, AuthCard, AuthInput, AuthButton, AlertBanner, StaffFooter } from './AuthShared';
 
 // Google Icon SVG Component
@@ -19,32 +19,33 @@ export default function RefinedRegister() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  
+
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
+    fullName: '',
     email: '',
     phone: '',
     password: '',
     confirmPassword: '',
-    agree: false
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const validate = () => {
     const errors: Record<string, string> = {};
-    if (!formData.firstName) errors.firstName = "This field is required";
-    if (!formData.lastName) errors.lastName = "This field is required";
+    if (!formData.fullName.trim()) errors.fullName = "This field is required";
     if (!formData.email) {
       errors.email = "This field is required";
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       errors.email = "Please enter a valid email address";
     }
     if (!formData.phone) errors.phone = "This field is required";
-    if (!formData.password) errors.password = "This field is required";
+    if (!formData.password) {
+      errors.password = "This field is required";
+    } else if (formData.password.length < 8) {
+      errors.password = "Password must be at least 8 characters";
+    }
     if (formData.password !== formData.confirmPassword) errors.confirmPassword = "Passwords do not match";
-    
+
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -56,13 +57,20 @@ export default function RefinedRegister() {
     setIsLoading(true);
     setError('');
 
+    // Backend still expects firstName/lastName separately — split the single
+    // "Full Name" field the same way the rest of the form is presented visually.
+    const trimmed = formData.fullName.trim().replace(/\s+/g, ' ');
+    const spaceIdx = trimmed.indexOf(' ');
+    const firstName = spaceIdx === -1 ? trimmed : trimmed.slice(0, spaceIdx);
+    const lastName = spaceIdx === -1 ? '' : trimmed.slice(spaceIdx + 1);
+
     try {
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
+          firstName,
+          lastName,
           email: formData.email,
           phone: formData.phone,
           password: formData.password,
@@ -92,104 +100,77 @@ export default function RefinedRegister() {
 
   return (
     <div className="min-h-screen bg-[#F5F3FF] flex flex-col items-center justify-center p-6">
-      <BrandHeader 
-        title="Join CLOUD LAUNDRY.LK"
-        subtitle="Book professional cleaning services for your home or office"
+      <BrandHeader
+        title="CLOUD LAUNDRY.LK"
+        subtitle="Join thousands of customers across Sri Lanka"
       />
 
-      <AuthCard 
-        icon={<User size={24} />}
-        title="Customer Registration"
-        subtitle="Create an account to book cleaning services"
+      <AuthCard
+        title="Create your account"
+        subtitle="Fill in your details to get started"
+        className="max-w-[480px]"
       >
         {error && <AlertBanner type="error" message={error} />}
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          <AuthInput
-            label="First Name"
-            placeholder="John"
-            leftIcon={<User size={18} />}
-            name="firstName"
-            value={formData.firstName}
-            onChange={(e) => setFormData({...formData, firstName: e.target.value})}
-            error={fieldErrors.firstName}
-          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <AuthInput
+              label="Full Name"
+              placeholder="Jane Doe"
+              leftIcon={<User size={18} />}
+              name="fullName"
+              value={formData.fullName}
+              onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+              error={fieldErrors.fullName}
+            />
 
-          <AuthInput
-            label="Last Name"
-            placeholder="Doe"
-            leftIcon={<User size={18} />}
-            name="lastName"
-            value={formData.lastName}
-            onChange={(e) => setFormData({...formData, lastName: e.target.value})}
-            error={fieldErrors.lastName}
-          />
+            <AuthInput
+              label="Phone Number"
+              placeholder="+94 71 234 5678"
+              leftIcon={<Phone size={18} />}
+              name="phone"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              error={fieldErrors.phone}
+            />
+          </div>
 
           <AuthInput
             label="Email Address"
-            placeholder="john@example.com"
+            placeholder="you@example.com"
             leftIcon={<Mail size={18} />}
             name="email"
             value={formData.email}
-            onChange={(e) => setFormData({...formData, email: e.target.value})}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             error={fieldErrors.email}
           />
 
-          <AuthInput
-            label="Phone Number"
-            placeholder="+94 7X XXX XXXX"
-            leftIcon={<Phone size={18} />}
-            name="phone"
-            value={formData.phone}
-            onChange={(e) => setFormData({...formData, phone: e.target.value})}
-            error={fieldErrors.phone}
-          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <AuthInput
+              label="Password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Min 8 characters"
+              leftIcon={<Lock size={18} />}
+              rightIcon={showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              onClickRightIcon={() => setShowPassword(!showPassword)}
+              name="password"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              error={fieldErrors.password}
+            />
 
-          <AuthInput
-            label="Password"
-            type={showPassword ? "text" : "password"}
-            placeholder="••••••••"
-            leftIcon={<Lock size={18} />}
-            rightIcon={showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            onClickRightIcon={() => setShowPassword(!showPassword)}
-            name="password"
-            value={formData.password}
-            onChange={(e) => setFormData({...formData, password: e.target.value})}
-            error={fieldErrors.password}
-          />
-
-          <AuthInput
-            label="Confirm Password"
-            type={showConfirmPassword ? "text" : "password"}
-            placeholder="••••••••"
-            leftIcon={<Lock size={18} />}
-            rightIcon={showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            onClickRightIcon={() => setShowConfirmPassword(!showConfirmPassword)}
-            name="confirmPassword"
-            value={formData.confirmPassword}
-            onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
-            error={fieldErrors.confirmPassword}
-          />
-
-          <div className="flex items-center gap-2 py-1">
-            <button 
-              type="button" 
-              onClick={() => setFormData({...formData, agree: !formData.agree})}
-              className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-                formData.agree 
-                  ? 'border-purple-600 bg-white' 
-                  : 'border-purple-600 bg-white'
-              }`}
-            >
-              {formData.agree && (
-                <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-            </button>
-            <label className="text-sm text-[#6B7280]">
-              I agree to the <span className="text-[#7C3AED] font-semibold cursor-pointer">Terms & Conditions</span>
-            </label>
+            <AuthInput
+              label="Confirm Password"
+              type={showConfirmPassword ? "text" : "password"}
+              placeholder="Repeat password"
+              leftIcon={<Lock size={18} />}
+              rightIcon={showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              onClickRightIcon={() => setShowConfirmPassword(!showConfirmPassword)}
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+              error={fieldErrors.confirmPassword}
+            />
           </div>
 
           <AuthButton type="submit" isLoading={isLoading}>
@@ -197,13 +178,31 @@ export default function RefinedRegister() {
           </AuthButton>
         </form>
 
-        <div className="mt-8 text-center text-sm text-[#6B7280]">
+        <div className="flex items-center gap-3 my-6">
+          <div className="flex-1 h-px bg-[#E5E7EB]" />
+          <span className="text-xs font-medium text-[#9CA3AF]">OR</span>
+          <div className="flex-1 h-px bg-[#E5E7EB]" />
+        </div>
+
+        <AuthButton type="button" variant="ghost" onClick={handleGoogleSignUp} className="gap-3">
+          <GoogleIcon />
+          Sign up with Google
+        </AuthButton>
+
+        <div className="mt-6 text-center text-sm text-[#6B7280]">
           Already have an account?{' '}
           <Link to="/login" className="text-[#7C3AED] font-semibold hover:underline">
-            Sign In
+            Sign in
           </Link>
         </div>
       </AuthCard>
+
+      <p className="max-w-[480px] text-center text-xs text-[#9CA3AF] mt-6 px-6">
+        By creating an account you agree to our{' '}
+        <span className="text-[#7C3AED] font-medium cursor-pointer hover:underline">Terms of Service</span>
+        {' '}&amp;{' '}
+        <span className="text-[#7C3AED] font-medium cursor-pointer hover:underline">Privacy Policy</span>
+      </p>
 
       <StaffFooter />
     </div>

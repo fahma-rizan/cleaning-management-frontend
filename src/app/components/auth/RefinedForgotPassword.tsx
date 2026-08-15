@@ -54,7 +54,7 @@ export default function RefinedForgotPassword() {
           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#6D28D9] flex items-center justify-center mb-4 text-white">
             <Key size={24} />
           </div>
-          <h2 className="text-20px font-semibold text-[#111827]">Forgot Password?</h2>
+          <h2 className="text-[20px] font-semibold text-[#111827]">Forgot Password?</h2>
           <p className="text-sm text-[#6B7280] mt-1 text-center">Enter your registered email and we'll send you a reset code</p>
         </div>
 

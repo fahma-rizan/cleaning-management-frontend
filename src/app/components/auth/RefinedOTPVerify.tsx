@@ -1,11 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail } from 'lucide-react';
+import { MailCheck } from 'lucide-react';
 import { BrandHeader, AuthCard, AuthButton, AlertBanner, StaffFooter } from './AuthShared';
 
 interface Props {
   onLogin?: (user: any) => void;
 }
+
+// Matches the backend's actual OTP expiry window (controllers/authController.js
+// sets otpExpiry 10 minutes out) — this is a real countdown, not decoration.
+const OTP_LIFETIME_SECONDS = 10 * 60;
 
 export default function RefinedOTPVerify({ onLogin }: Props) {
   const navigate = useNavigate();
@@ -13,7 +17,7 @@ export default function RefinedOTPVerify({ onLogin }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [timer, setTimer] = useState(60);
+  const [secondsLeft, setSecondsLeft] = useState(OTP_LIFETIME_SECONDS);
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
 
   const email = sessionStorage.getItem('pendingEmail') || '';
@@ -22,12 +26,16 @@ export default function RefinedOTPVerify({ onLogin }: Props) {
     : 'your email';
 
   useEffect(() => {
-    if (timer <= 0) return;
+    if (secondsLeft <= 0) return;
     const interval = setInterval(() => {
-      setTimer((prev) => (prev > 0 ? prev - 1 : 0));
+      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(interval);
-  }, [timer]);
+  }, [secondsLeft]);
+
+  const mm = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
+  const ss = String(secondsLeft % 60).padStart(2, '0');
+  const expired = secondsLeft <= 0;
 
   const handleChange = (index: number, value: string) => {
     if (value.length > 1) return;
@@ -97,7 +105,7 @@ export default function RefinedOTPVerify({ onLogin }: Props) {
       });
       const data = await response.json();
       if (data.success) {
-        setTimer(60);
+        setSecondsLeft(OTP_LIFETIME_SECONDS);
         setSuccess('New OTP sent to your email!');
         setTimeout(() => setSuccess(''), 3000);
       } else {
@@ -110,15 +118,23 @@ export default function RefinedOTPVerify({ onLogin }: Props) {
 
   return (
     <div className="min-h-screen bg-[#F5F3FF] flex flex-col items-center justify-center p-6">
-      <BrandHeader subtitle="Verify your email to complete registration" />
+      <BrandHeader subtitle="Verify your email address" />
 
       <AuthCard
-        icon={<Mail size={24} />}
-        title="Verify Your Email"
-        subtitle={`We've sent a 6-digit code to ${maskedEmail}`}
+        icon={<MailCheck size={24} />}
+        title="Check your email"
+        subtitle="Enter the 6-digit code we sent to verify your account"
       >
         {success && <AlertBanner type="success" message={success} />}
         {error && <AlertBanner type="error" message={error} />}
+
+        <p className="text-sm text-[#6B7280] text-center -mt-2 mb-6">
+          We sent a 6-digit code to <span className="font-semibold text-[#374151]">{maskedEmail}</span>.
+        </p>
+
+        <p className={`text-center text-xs font-semibold mb-6 ${expired ? 'text-[#DC2626]' : 'text-[#9CA3AF]'}`}>
+          {expired ? 'Code expired' : `Expires in ${mm}:${ss}`}
+        </p>
 
         <div className="flex justify-center gap-2 mb-8">
           {otp.map((digit, idx) => (
@@ -126,41 +142,38 @@ export default function RefinedOTPVerify({ onLogin }: Props) {
               key={idx}
               ref={(el) => (inputs.current[idx] = el)}
               type="text"
+              inputMode="numeric"
               maxLength={1}
               value={digit}
+              disabled={expired}
               onChange={(e) => handleChange(idx, e.target.value)}
               onKeyDown={(e) => handleKeyDown(idx, e)}
               className={`
                 w-12 h-14 rounded-lg border-[1.5px] outline-none text-center text-xl font-bold transition-all
                 ${digit ? 'border-[#7C3AED] bg-purple-50' : 'border-[#E5E7EB] bg-white'}
                 focus:border-[#7C3AED] focus:ring-4 focus:ring-purple-500/10
+                disabled:opacity-50 disabled:cursor-not-allowed
                 ${error ? 'border-[#DC2626]' : ''}
               `}
             />
           ))}
         </div>
 
-        <div className="text-center mb-8">
+        <AuthButton onClick={handleVerify} isLoading={isLoading} disabled={expired}>
+          Verify Code
+        </AuthButton>
+
+        <div className="text-center mt-6">
           <p className="text-sm text-[#6B7280]">
-            Resend OTP{' '}
-            {timer > 0 ? (
-              <span className="text-[#6B7280] font-medium">
-                (Resend in 00:{timer.toString().padStart(2, '0')})
-              </span>
-            ) : (
-              <button
-                onClick={handleResend}
-                className="text-[#7C3AED] font-bold hover:underline"
-              >
-                Resend now
-              </button>
-            )}
+            Didn't receive it?{' '}
+            <button
+              onClick={handleResend}
+              className="text-[#7C3AED] font-bold hover:underline"
+            >
+              Resend OTP
+            </button>
           </p>
         </div>
-
-        <AuthButton onClick={handleVerify} isLoading={isLoading}>
-          Verify & Continue
-        </AuthButton>
       </AuthCard>
 
       <StaffFooter />

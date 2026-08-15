@@ -10,6 +10,11 @@ export default function RefinedVerifyResetCode() {
   const [error, setError] = useState('');
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
 
+  const email = sessionStorage.getItem('resetEmail') || '';
+  const maskedEmail = email
+    ? email.replace(/(.{2})(.*)(@.*)/, '$1***$3')
+    : 'your email';
+
   const handleChange = (index: number, value: string) => {
     if (value.length > 1) return;
     const newOtp = [...otp];
@@ -95,9 +100,9 @@ export default function RefinedVerifyResetCode() {
           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#6D28D9] flex items-center justify-center mb-4 text-white">
             <Shield size={24} />
           </div>
-          <h2 className="text-20px font-semibold text-[#111827]">Enter Verification Code</h2>
+          <h2 className="text-[20px] font-semibold text-[#111827]">Enter Verification Code</h2>
           <p className="text-sm text-[#6B7280] mt-1 text-center">
-            We've sent a 6-digit code to jo***@gmail.com
+            We've sent a 6-digit code to {maskedEmail}
           </p>
         </div>
 

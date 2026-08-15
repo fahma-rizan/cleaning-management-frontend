@@ -69,24 +69,24 @@ export default function RefinedResetPassword() {
 
   return (
     <div className="min-h-screen bg-[#F5F3FF] flex flex-col items-center justify-center p-6">
-      <BrandHeader subtitle="Create your new password" />
+      <BrandHeader subtitle="Choose a new password" />
 
       <AuthCard className="relative">
-        <button 
+        <button
           onClick={() => navigate('/verify-reset-code')}
           className="absolute left-6 top-6 text-[#7C3AED] hover:text-[#6D28D9] flex items-center gap-1.5 text-sm font-medium transition-colors"
         >
           <ArrowLeft size={16} />
-          Back
+          Back to OTP
         </button>
 
         <div className="flex flex-col items-center mt-8 mb-8">
           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#6D28D9] flex items-center justify-center mb-4 text-white">
             <Lock size={24} />
           </div>
-          <h2 className="text-20px font-semibold text-[#111827]">Create New Password</h2>
+          <h2 className="text-[20px] font-semibold text-[#111827]">Set new password</h2>
           <p className="text-sm text-[#6B7280] mt-1 text-center">
-            Your new password must be different from previous passwords
+            Choose a strong password for your account
           </p>
         </div>
 
@@ -96,7 +96,7 @@ export default function RefinedResetPassword() {
           <AuthInput
             label="New Password"
             type={showPass ? "text" : "password"}
-            placeholder="Enter new password"
+            placeholder="Min 8 characters"
             leftIcon={<Lock size={18} />}
             rightIcon={showPass ? <EyeOff size={18} /> : <Eye size={18} />}
             onClickRightIcon={() => setShowPass(!showPass)}
@@ -107,9 +107,9 @@ export default function RefinedResetPassword() {
           />
 
           <AuthInput
-            label="Confirm New Password"
+            label="Confirm Password"
             type={showConfirmPass ? "text" : "password"}
-            placeholder="Confirm new password"
+            placeholder="Repeat password"
             leftIcon={<Lock size={18} />}
             rightIcon={showConfirmPass ? <EyeOff size={18} /> : <Eye size={18} />}
             onClickRightIcon={() => setShowConfirmPass(!showConfirmPass)}
