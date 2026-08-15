@@ -91,6 +91,9 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
     rooms: 2,
     bathrooms: 1,
     frequency: 'once',
+    // Home/Office cleaning — per-sqft pricing
+    cleaningType: 'normal',
+    squareFeet: 0,
     specialInstructions: '',
     packageType: 'standard',
     // Laundry specific fields
@@ -128,7 +131,32 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
   const isWashingPressingService = serviceId === '10';
   const isPressingOnlyService = serviceId === '11';
   const isHomeCleaningService = ['1', '5', '6', '7', '8'].includes(serviceId || '');
-  
+
+  // ─── Home cleaning price map (LKR per square foot, by cleaning type) ──────────
+  const homeCleaningPrices: Record<string, Record<string, number>> = {
+    '1': { normal: 25, 'move-in-out': 30, 'after-construction': 35 }, // House Deep Cleaning
+    '5': { normal: 25, 'move-in-out': 30, 'after-construction': 35 }, // Commercial Cleaning
+    '6': { general: 20 },                                              // General Cleaning
+    '7': { floor: 30 },                                                // Floor Cleaning
+    '8': { 'cut-polish': 35 },                                         // Floor Cut & Polish
+  };
+
+  const homeCleaningTypes: Record<string, { id: string; label: string }[]> = {
+    '1': [
+      { id: 'normal', label: 'Normal Deep Cleaning — LKR 25/sqft' },
+      { id: 'move-in-out', label: 'Move In / Move Out — LKR 30/sqft' },
+      { id: 'after-construction', label: 'After Construction — LKR 35/sqft' },
+    ],
+    '5': [
+      { id: 'normal', label: 'Normal Deep Cleaning — LKR 25/sqft' },
+      { id: 'move-in-out', label: 'Move In / Move Out — LKR 30/sqft' },
+      { id: 'after-construction', label: 'After Construction — LKR 35/sqft' },
+    ],
+    '6': [{ id: 'general', label: 'General Cleaning — LKR 20/sqft' }],
+    '7': [{ id: 'floor', label: 'Floor Cleaning — LKR 30/sqft' }],
+    '8': [{ id: 'cut-polish', label: 'Cut & Polish — LKR 35/sqft' }],
+  };
+
   const [estimatedPrice, setEstimatedPrice] = useState(0);
   const [slotCounts, setSlotCounts] = useState<Record<string, number>>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -176,11 +204,21 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
     } else if (isCarpetCleaning) {
       setEstimatedPrice(500 * bookingData.carpetCount);
     } else if (isHomeCleaningService) {
-      setEstimatedPrice(4500);
+      const priceMap = homeCleaningPrices[serviceId || ''];
+      const pricePerSqft = priceMap?.[bookingData.cleaningType] || 0;
+      setEstimatedPrice(pricePerSqft * bookingData.squareFeet);
     } else {
       setEstimatedPrice(0);
     }
-  }, [serviceId, bookingData.sofaSeatingCapacity, bookingData.mattressCount, bookingData.carpetCount]);
+  }, [serviceId, bookingData.sofaSeatingCapacity, bookingData.mattressCount, bookingData.carpetCount, bookingData.cleaningType, bookingData.squareFeet]);
+
+  // Default cleaning type per service (single-option services only have one anyway)
+  useEffect(() => {
+    if (serviceId === '6') handleInputChange('cleaningType', 'general');
+    else if (serviceId === '7') handleInputChange('cleaningType', 'floor');
+    else if (serviceId === '8') handleInputChange('cleaningType', 'cut-polish');
+    else if (isHomeCleaningService) handleInputChange('cleaningType', 'normal');
+  }, [serviceId]);
 
   // Curtain price calculation
   const calculateCurtainPrice = () => {
@@ -247,6 +285,8 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
       errors.laundryServices = 'Please select at least one laundry service.';
     if ((isDryCleaningService || isWashingPressingService || isPressingOnlyService) && estimatedPrice === 0)
       errors.items = 'Please select at least one item from the price list.';
+    if (isHomeCleaningService && bookingData.squareFeet <= 0)
+      errors.squareFeet = 'Please enter the area size in square feet.';
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -337,31 +377,74 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                 <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">
                   <h2 className="text-2xl font-bold mb-6 dark:text-white flex items-center gap-2">
                     <Home className="w-6 h-6 text-purple-600" />
-                    Property Details
+                    Cleaning Details
                   </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Property Size</label>
-                      <select
-                        value={bookingData.houseSize}
-                        onChange={(e) => handleInputChange('houseSize', e.target.value)}
-                        className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
-                      >
-                        <option value="small">Small (Apartment/Studio)</option>
-                        <option value="medium">Medium (2-3 Bedroom House)</option>
-                        <option value="large">Large (4+ Bedroom House/Villa)</option>
-                        <option value="office">Office/Commercial Space</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Number of Rooms</label>
-                      <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-900 px-5 py-3 rounded-2xl">
-                        <button type="button" onClick={() => handleInputChange('rooms', Math.max(1, bookingData.rooms - 1))} className="text-purple-600 font-bold text-xl">-</button>
-                        <span className="font-bold dark:text-white">{bookingData.rooms} Rooms</span>
-                        <button type="button" onClick={() => handleInputChange('rooms', bookingData.rooms + 1)} className="text-purple-600 font-bold text-xl">+</button>
+
+                  {/* Cleaning Type Selection — only for services with multiple types */}
+                  {(homeCleaningTypes[serviceId || '']?.length || 0) > 1 && (
+                    <div className="mb-6">
+                      <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-3">
+                        Cleaning Type
+                      </label>
+                      <div className="space-y-2">
+                        {homeCleaningTypes[serviceId || '']?.map((type) => (
+                          <button
+                            key={type.id}
+                            type="button"
+                            onClick={() => handleInputChange('cleaningType', type.id)}
+                            className={`w-full text-left px-5 py-4 rounded-2xl border-2 transition-all ${
+                              bookingData.cleaningType === type.id
+                                ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/10'
+                                : 'border-gray-100 dark:border-gray-700 hover:border-purple-300'
+                            }`}
+                          >
+                            <span className="font-semibold dark:text-white">{type.label}</span>
+                          </button>
+                        ))}
                       </div>
                     </div>
+                  )}
+
+                  {/* Area Size */}
+                  <div className="mb-6">
+                    <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">
+                      Area Size (Square Feet)
+                    </label>
+                    <input
+                      type="number"
+                      value={bookingData.squareFeet || ''}
+                      onChange={(e) => handleInputChange('squareFeet', Number(e.target.value))}
+                      placeholder="Enter square feet e.g. 1500"
+                      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
+                      min={1}
+                    />
+                    {bookingData.squareFeet > 0 && (
+                      <p className="mt-2 text-purple-600 font-semibold text-sm">
+                        Estimated: LKR {(
+                          (homeCleaningPrices[serviceId || '']?.[bookingData.cleaningType] || 0) *
+                          bookingData.squareFeet
+                        ).toLocaleString()}
+                        {' '}(LKR {homeCleaningPrices[serviceId || '']?.[bookingData.cleaningType] || 0}/sqft × {bookingData.squareFeet} sqft)
+                      </p>
+                    )}
                   </div>
+
+                  {/* Frequency — only for regular cleaning services */}
+                  {['1', '6'].includes(serviceId || '') && (
+                    <div>
+                      <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Cleaning Frequency</label>
+                      <select
+                        value={bookingData.frequency}
+                        onChange={(e) => handleInputChange('frequency', e.target.value)}
+                        className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
+                      >
+                        <option value="once">One Time</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="biweekly">Bi-Weekly</option>
+                        <option value="monthly">Monthly</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">
