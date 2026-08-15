@@ -13,6 +13,8 @@ import ProfileModal from './ProfileModal';
 // ── Admin sub-components ─────────────────────────────────────────────────────
 import AdminOverview            from './admin/AdminOverview';
 import { StaffManagement }      from './admin/StaffManagement';
+import { StaffAvailabilityManagement } from './admin/StaffAvailabilityManagement';
+import { TaskReassignmentManagement }  from './admin/TaskReassignmentManagement';
 import { AdminManagement }      from './admin/AdminManagement';
 import { CustomerManagement }   from './admin/CustomerManagement';
 import { ReviewsManagement }    from './admin/ReviewsManagement';
@@ -292,6 +294,8 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
 
             {activeTab === 'overview'   && canAccessTab('overview',   user.adminRole) && <AdminOverview />}
             {activeTab === 'staff'      && canAccessTab('staff',      user.adminRole) && <StaffManagement />}
+            {activeTab === 'staff-availability' && canAccessTab('staff-availability', user.adminRole) && <StaffAvailabilityManagement />}
+            {activeTab === 'task-reassignment'  && canAccessTab('task-reassignment',  user.adminRole) && <TaskReassignmentManagement />}
             {activeTab === 'admin-mgmt' && canAccessTab('admin-mgmt', user.adminRole) && <AdminManagement currentUser={user} />}
             {activeTab === 'customer'   && canAccessTab('customer',   user.adminRole) && <CustomerManagement />}
             {activeTab === 'reviews'    && canAccessTab('reviews',    user.adminRole) && <ReviewsManagement />}
@@ -301,8 +305,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
             {activeTab === 'settings'   && canAccessTab('settings',   user.adminRole) && <SystemSettings />}
 
             {/* Tabs owned by other teammates */}
-            {(activeTab === 'payments' || activeTab === 'inventory' ||
-              activeTab === 'staff-availability' || activeTab === 'task-reassignment') && (
+            {(activeTab === 'payments' || activeTab === 'inventory') && (
               <div className="flex items-center justify-center min-h-[60vh]">
                 <div className="text-center">
                   <p className="text-gray-400 text-xs uppercase tracking-widest font-bold mb-2">Coming soon</p>
