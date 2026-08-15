@@ -3,7 +3,7 @@ export interface User {
   name: string;
   email: string;
   role: 'customer' | 'admin' | 'cleaner' | 'staff';
-  adminRole?: 'Admin' | 'Operations Manager' | 'Customer Support';
+  adminRole?: 'Super Admin' | 'Main Admin' | 'Operations Manager' | 'Customer Support';
   verified: boolean;
   loyaltyPoints?: number;
   badge?: 'Silver' | 'Gold' | 'Platinum';

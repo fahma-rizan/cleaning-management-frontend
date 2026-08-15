@@ -16,7 +16,7 @@ export default function RegisterAdmin() {
     accessCode: '',
     password: '',
     confirmPassword: '',
-    adminRole: 'Admin' as 'Admin' | 'Operations Manager' | 'Customer Support',
+    adminRole: 'Main Admin' as 'Super Admin' | 'Main Admin' | 'Operations Manager' | 'Customer Support',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -230,7 +230,7 @@ export default function RegisterAdmin() {
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
               required
             >
-              <option value="Admin">Admin (Full Access)</option>
+              <option value="Main Admin">Main Admin (Full Access)</option>
               <option value="Operations Manager">Operations Manager</option>
               <option value="Customer Support">Customer Support</option>
             </select>

@@ -31,7 +31,7 @@ export default function Login({ onLogin }: LoginProps) {
           name: "Admin User",
           email: email,
           role: "admin",
-          adminRole: "Admin",
+          adminRole: "Super Admin",
           verified: true,
         };
         onLogin(adminUser);
