@@ -14,6 +14,7 @@ import { Badge } from "../ui/badge";
 import { toast } from "sonner";
 import { Pagination } from "../ui/pagination";
 import { staffAPI, getPhotoUrl } from "../../lib/api";
+import { isValidEmail, isValidFullName, isValidPhone } from "../../lib/validation";
 
 interface StaffMember {
   _id: string;
@@ -22,7 +23,7 @@ interface StaffMember {
   phone: string;
   nic: string;
   address: string;
-  specifications: string[];
+  specializations: string[];
   rating: number;
   jobsCompleted: number;
   staffStatus: "Active" | "Inactive";
@@ -32,6 +33,7 @@ interface StaffMember {
 const normalizeStaffMember = (staff: any): StaffMember => ({
   ...staff,
   staffStatus: staff.staffStatus ?? staff.status ?? "Active",
+  specializations: staff.specializations ?? staff.specifications ?? [],
 });
 
 export function StaffManagement() {
@@ -82,8 +84,9 @@ export function StaffManagement() {
     email: "",
     phone: "",
     nic: "",
+    password: "",
     address: "",
-    specifications: [] as string[],
+    specializations: [] as string[],
     status: "Active" as "Active" | "Inactive",
     photo: null as File | null,
   });
@@ -108,14 +111,16 @@ export function StaffManagement() {
   const toggleSpecification = (spec: string) => {
     setFormData((prev) => ({
       ...prev,
-      specifications: prev.specifications.includes(spec)
-        ? prev.specifications.filter((s) => s !== spec)
-        : [...prev.specifications, spec],
+      specializations: prev.specializations.includes(spec)
+        ? prev.specializations.filter((s) => s !== spec)
+        : [...prev.specializations, spec],
     }));
   };
 
   const handleSaveStaff = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const isCreating = view === "add" || !editingStaff;
 
     // Basic validation
     if (
@@ -123,9 +128,22 @@ export function StaffManagement() {
       !formData.fullName ||
       !formData.email ||
       !formData.phone ||
-      !formData.nic
+      !formData.nic ||
+      (isCreating && !formData.password)
     ) {
       toast.error("Please fill all compulsory fields and upload a photo");
+      return;
+    }
+     if (!isValidFullName(formData.fullName)) {
+      toast.error("Full name must contain at least 2 words (e.g. first and last name).");
+      return;
+    }
+    if (!isValidEmail(formData.email)) {
+      toast.error("Please enter a valid email address.");
+      return;
+    }
+    if (!isValidPhone(formData.phone)) {
+      toast.error("Phone number must contain 10 digits.");
       return;
     }
 
@@ -136,8 +154,9 @@ export function StaffManagement() {
       fd.append("email", formData.email);
       fd.append("phone", formData.phone);
       fd.append("nic", formData.nic);
+      if (isCreating) fd.append("password", formData.password);
       fd.append("address", formData.address);
-      fd.append("specifications", JSON.stringify(formData.specifications));
+      fd.append("specializations", JSON.stringify(formData.specializations));
       fd.append("status", formData.status);
       if (formData.photo) fd.append("photo", formData.photo);
 
@@ -164,8 +183,9 @@ export function StaffManagement() {
         email: "",
         phone: "",
         nic: "",
+        password: "",
         address: "",
-        specifications: [],
+        specializations: [],
         status: "Active",
         photo: null,
       });
@@ -255,7 +275,11 @@ export function StaffManagement() {
           </button>
         </div>
 
-        <form onSubmit={handleSaveStaff} className="space-y-6">
+        <form
+          onSubmit={handleSaveStaff}
+          autoComplete="off"
+          className="space-y-6"
+        >
           {/* Photo Upload */}
           <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50/50">
             <input
@@ -295,6 +319,8 @@ export function StaffManagement() {
                 required
                 placeholder="Enter full name"
                 className="h-12 rounded-xl"
+                name="fullName"
+                autoComplete="off"
                 value={formData.fullName}
                 onChange={(e) =>
                   setFormData({ ...formData, fullName: e.target.value })
@@ -310,9 +336,28 @@ export function StaffManagement() {
                 type="email"
                 placeholder="Enter email address"
                 className="h-12 rounded-xl"
+                name="email"
+                autoComplete="off"
                 value={formData.email}
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-700">
+                Password *
+              </label>
+              <Input
+                required
+                type="password"
+                name="password"
+                autoComplete="new-password"
+                placeholder="Enter password"
+                className="h-12 rounded-xl"
+                value={formData.password}
+                onChange={(e) =>
+                  setFormData({ ...formData, password: e.target.value })
                 }
               />
             </div>
@@ -372,7 +417,7 @@ export function StaffManagement() {
                 >
                   <input
                     type="checkbox"
-                    checked={formData.specifications.includes(spec)}
+                    checked={formData.specializations.includes(spec)}
                     onChange={() => toggleSpecification(spec)}
                     className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
                   />
@@ -640,20 +685,19 @@ export function StaffManagement() {
         </div>
 
         {filteredStaff.length === 0 && (
-          <>
-            <div className="p-20 text-center text-gray-500 font-bold">
-              No staff found
-            </div>
-            <Pagination
-              currentPage={currentPage}
-              totalItems={filteredStaff.length}
-              itemsPerPage={itemsPerPage}
-              onPageChange={setCurrentPage}
-              itemLabel="staff"
-            />
-          </>
+          <div className="p-20 text-center text-gray-500 font-bold">
+            No staff found
+          </div>
         )}
       </div>
+
+      <Pagination
+        currentPage={currentPage}
+        totalItems={filteredStaff.length}
+        itemsPerPage={itemsPerPage}
+        onPageChange={setCurrentPage}
+        itemLabel="staff"
+      />
 
       {selectedStaff && (
         <div
@@ -762,11 +806,11 @@ export function StaffManagement() {
 
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-                  Specifications
+                  Specializations
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {selectedStaff.specifications.length > 0 ? (
-                    selectedStaff.specifications.map((spec, idx) => (
+                  {selectedStaff.specializations.length > 0 ? (
+                    selectedStaff.specializations.map((spec, idx) => (
                       <span
                         key={idx}
                         className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-xs font-bold"
@@ -776,7 +820,7 @@ export function StaffManagement() {
                     ))
                   ) : (
                     <span className="text-sm text-gray-500">
-                      No specifications
+                      No specializations
                     </span>
                   )}
                 </div>

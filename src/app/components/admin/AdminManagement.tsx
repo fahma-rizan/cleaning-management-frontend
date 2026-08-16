@@ -13,6 +13,7 @@ import {
   User as UserIcon,
   CheckCircle2,
   Eye,
+  EyeOff,
   Ban,
   Phone,
   MapPin,
@@ -23,12 +24,14 @@ import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Pagination } from "../ui/pagination";
+import { toast } from "sonner";
 import {
   type AdminRole,
   getAdminRowActions,
   getAssignableRoles,
 } from "../../lib/permissions";
 import { normalizePhoneNumber } from "../../lib/phone";
+import { isValidFullName, isValidEmail, isValidPhone } from "../../lib/validation";
 import type { User } from "../../types";
 
 interface AdminUser {
@@ -67,6 +70,7 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [viewingAdmin, setViewingAdmin] = useState<AdminUser | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -116,6 +120,7 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
     );
     if (admin) {
       setEditingAdmin(admin);
+      setShowPassword(false);
       setFormData({
         name: admin.name,
         email: admin.email,
@@ -127,6 +132,7 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
       });
     } else {
       setEditingAdmin(null);
+      setShowPassword(false);
       setFormData({
         name: "",
         email: "",
@@ -147,7 +153,31 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
 
     // Extra guard: verify the chosen role is actually assignable
     if (!assignable.includes(formData.role)) {
-      alert("You are not permitted to assign this role.");
+      toast.error("You are not permitted to assign this role.");
+      return;
+    }
+    if (!isValidFullName(formData.name)) {
+      toast.error("Name must contain at least 2 words (e.g. first and last name).");
+      return;
+    }
+    if (!isValidEmail(formData.email)) {
+      toast.error("Please enter a valid email address.");
+      return;
+    }
+    if (!isValidPhone(formData.phone)) {
+      toast.error("Contact number must contain 10 digits.");
+      return;
+    }
+    if (!formData.address.trim()) {
+      toast.error("Address must not be empty.");
+      return;
+    }
+    if (
+      !formData.name.trim() ||
+      !formData.email.trim() ||
+      (!editingAdmin && !formData.password.trim())
+    ) {
+      toast.error("Please fill in Name, Email, and Password.");
       return;
     }
     try {
@@ -177,7 +207,7 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
       }
       setIsModalOpen(false);
     } catch (err: any) {
-      alert(err.error || "Failed to save admin");
+      toast.error(err.error || "Failed to save admin");
     }
   };
 
@@ -643,11 +673,12 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
                     </div>
                   </div>
                 ) : (
+                  
                   // Editable fields for adding new admin
                   <>
                     <div className="space-y-2">
                       <Label className="text-sm font-bold text-gray-700">
-                        Name
+                        Full Name
                       </Label>
                       <div className="relative">
                         <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -731,10 +762,22 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
                         onChange={(e) =>
                           setFormData({ ...formData, password: e.target.value })
                         }
-                        type="password"
+                        type={showPassword ? "text" : "password"}
                         placeholder="••••••••"
-                        className="pl-12 h-12 rounded-xl border-gray-200 focus:ring-purple-500"
+                        className="pl-12 pr-12 h-12 rounded-xl border-gray-200 focus:ring-purple-500"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="w-5 h-5" />
+                        ) : (
+                          <Eye className="w-5 h-5" />
+                        )}
+                      </button>
                     </div>
                   </div>
                 )}
