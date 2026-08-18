@@ -201,7 +201,7 @@ export default function PriceReductionWorkflow({ user }: PriceReductionWorkflowP
             {/* FIX: was navigating to '/payment' with no bookingId param —
                 that route requires :bookingId and would error. Send the
                 admin back to the dashboard instead, which always works. */}
-            <button onClick={() => navigate('/admin/financial-dashboard')} className="w-full bg-gray-100 text-gray-700 py-3 rounded-lg hover:bg-gray-200">
+            <button onClick={() => navigate('/billing/admin/financial-dashboard')} className="w-full bg-gray-100 text-gray-700 py-3 rounded-lg hover:bg-gray-200">
               Back to Dashboard
             </button>
           </div>

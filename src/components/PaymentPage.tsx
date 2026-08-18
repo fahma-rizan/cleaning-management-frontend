@@ -247,9 +247,9 @@ const transformInvoiceForBackend = (invoiceData: InvoiceData, user: User): any =
       const navigationState = { state: { booking: completedBooking, invoice: savedInvoice, paymentMethod: method } };
       
       if (method === 'cod' || method === 'pay-after-completion') {
-        navigate('/booking-success', navigationState);
+        navigate('/billing/booking-success', navigationState);
       } else {
-        navigate('/payment-success', navigationState);
+        navigate('/billing/payment-success', navigationState);
       }
     } catch (error) {
       console.error('An error occurred during payment completion:', error);

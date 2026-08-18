@@ -64,7 +64,7 @@ export default function PaymentLinkPage({ user }: PaymentLinkPageProps) {
   };
 
   useEffect(() => {
-    if (!booking && !invoiceParam) navigate('/payment');
+    if (!booking && !invoiceParam) navigate('/billing/payment');
   }, [booking, invoiceParam]);
 
   const handlePay = async () => {
@@ -220,7 +220,7 @@ export default function PaymentLinkPage({ user }: PaymentLinkPageProps) {
                 className="w-full bg-purple-600 text-white py-3 rounded-xl hover:bg-purple-700 font-medium">
                 View Final Invoice
               </button>
-              <button onClick={() => navigate('/payment')}
+              <button onClick={() => navigate('/billing/payment')}
                 className="w-full bg-gray-100 text-gray-700 py-3 rounded-xl hover:bg-gray-200">
                 Back to Home
               </button>

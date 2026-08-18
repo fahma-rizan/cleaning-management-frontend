@@ -90,7 +90,7 @@ export default function BookingSuccessPage({ user }: BookingSuccessPageProps) {
   // Changed to /admin/financials which is the real landing page.
   useEffect(() => {
     if (!booking || !invoice) {
-      const timer = setTimeout(() => navigate('/admin/financials', { replace: true }), 3000);
+      const timer = setTimeout(() => navigate('/billing/admin/financial-dashboard', { replace: true }), 3000);
       return () => clearTimeout(timer);
     }
   }, [booking, invoice, navigate]);
@@ -137,7 +137,7 @@ export default function BookingSuccessPage({ user }: BookingSuccessPageProps) {
   // FIX (Bug 7): Changed from navigate('/dashboard') to navigate('/admin/financials')
   const HomeButton = (
     <button
-      onClick={() => navigate('/admin/financials')}
+      onClick={() => navigate('/billing/admin/financial-dashboard')}
       className="w-full py-3 rounded-lg transition-colors flex items-center justify-center gap-2 bg-gray-200 text-gray-800 hover:bg-gray-300 text-base font-medium"
     >
       Go to Home

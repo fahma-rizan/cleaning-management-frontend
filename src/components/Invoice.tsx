@@ -89,7 +89,7 @@ export default function Invoice({ user }: InvoiceProps) {
 
   useEffect(() => {
     if (!bookingId) {
-      navigate('/admin/financial-dashboard');
+      navigate('/billing/admin/financial-dashboard');
       return;
     }
     const fetchInvoice = async () => {

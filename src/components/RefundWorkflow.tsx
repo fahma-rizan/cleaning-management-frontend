@@ -343,7 +343,7 @@ export default function RefundWorkflow({ user }: RefundWorkflowProps) {
             <div className="space-y-3">
               <button onClick={() => setShowInvoice(true)} className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 font-medium">View Refund Invoice</button>
               <button onClick={() => navigate(`/staff-invoice/${refundInvoice.invoiceNumber}`)} className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium">View Staff Invoice</button>
-              <button onClick={() => navigate('/payment')} className="w-full bg-gray-100 text-gray-700 py-3 rounded-lg hover:bg-gray-200">Back to Payment</button>
+              <button onClick={() => navigate('/billing/payment')} className="w-full bg-gray-100 text-gray-700 py-3 rounded-lg hover:bg-gray-200">Back to Payment</button>
             </div>
           </div>
         </div>

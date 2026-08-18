@@ -62,7 +62,7 @@ export default function PaymentSuccessPage({ user }: PaymentSuccessPageProps) {
           };
           method = 'payhere';
         } else {
-          navigate('/payment-failed', {
+          navigate('/billing/payment-failed', {
             state:   { orderId, statusCode, reason: p.get('reason') || 'Payment was declined or cancelled' },
             replace: true,
           });
@@ -102,7 +102,7 @@ export default function PaymentSuccessPage({ user }: PaymentSuccessPageProps) {
   // Redirect if no data after 3 seconds
   useEffect(() => {
     if (!booking || !invoice) {
-      const t = setTimeout(() => navigate('/admin/financial-dashboard', { replace: true }), 3000);
+      const t = setTimeout(() => navigate('/billing/admin/financial-dashboard', { replace: true }), 3000);
       return () => clearTimeout(t);
     }
   }, [booking, invoice, navigate]);
@@ -206,7 +206,7 @@ export default function PaymentSuccessPage({ user }: PaymentSuccessPageProps) {
                 className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 text-base font-medium">
                 <FileText className="w-5 h-5" /> View Invoice
               </button>
-              <button onClick={() => navigate('/admin/financial-dashboard')}
+              <button onClick={() => navigate('/billing/admin/financial-dashboard')}
                 className="w-full py-3 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 transition-colors flex items-center justify-center gap-2 text-base font-medium">
                 Go to Home
               </button>

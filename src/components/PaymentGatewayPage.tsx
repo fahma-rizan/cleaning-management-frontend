@@ -114,7 +114,7 @@ const PaymentGatewayPage = () => {
                   });
                 } catch {
                   // If we can't reach the backend, check URL as fallback
-                  navigate('/payment-failed', {
+                  navigate('/billing/payment-failed', {
                     replace: true,
                     state: { message: 'Could not verify payment status. Please contact support.', bookingId },
                   });
@@ -129,7 +129,7 @@ const PaymentGatewayPage = () => {
         }
       } catch (error) {
         console.error('Payment initiation failed:', error);
-        navigate('/payment-failed', { 
+        navigate('/billing/payment-failed', { 
           replace: true, 
           state: { 
             message: 'Could not connect to payment gateway.',
