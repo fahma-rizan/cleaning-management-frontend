@@ -105,7 +105,29 @@ const PaymentGatewayPage = () => {
                   const res = await fetch(`http://localhost:5000/api/bookings/${bookingId}`);
                   const booking = await res.json();
                   const paid = booking.status === 'confirmed' || booking.status === 'completed';
-                  navigate(paid ? '/payment-success' : '/payment-failed', {
+                  // FIX: was navigating to bare '/payment-success' / '/payment-failed' —
+                  // this component is mounted under /billing/* (nested inside the main
+                  // app's HashRouter, not its own top-level router), so an absolute path
+                  // without the /billing prefix doesn't match any route and the popup-close
+                  // success/fail redirect silently went nowhere. Also re-fetches the invoice
+                  // here (rather than trusting the pre-payment localStorage snapshot, which
+                  // is always unpaid/Rs. 0) so the success page shows the real paid amount.
+                  let freshInvoice: any = null;
+                  if (paid) {
+                    try {
+                      const invRes = await fetch(`http://localhost:5000/api/invoices/booking/${bookingId}`);
+                      if (invRes.ok) freshInvoice = await invRes.json();
+                    } catch {}
+                  }
+                  if (paid && freshInvoice) {
+                    localStorage.setItem('paymentSuccessData', JSON.stringify({
+                      booking,
+                      invoice: freshInvoice,
+                      paymentMethod: effectivePaymentMethod,
+                      timestamp: Date.now(),
+                    }));
+                  }
+                  navigate(paid ? '/billing/payment-success' : '/billing/payment-failed', {
                     replace: true,
                     state: paid ? undefined : {
                       message: 'Payment was not completed. This could be due to insufficient funds, a cancelled payment, or a declined card.',
