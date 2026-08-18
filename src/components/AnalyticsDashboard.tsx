@@ -12,6 +12,8 @@ import {
   FileText,
   Download,
   Filter,
+  XCircle,
+  RefreshCw,
 } from 'lucide-react';
 import type { User } from '../types';
 import DemoTopBar from '../components/DemoTopBar';

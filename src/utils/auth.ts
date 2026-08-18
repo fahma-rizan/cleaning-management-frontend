@@ -133,7 +133,7 @@ export const authApi = {
       headers.set('Authorization', `Bearer ${accessToken}`);
     }
 
-    const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:4000/api'}${endpoint}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}${endpoint}`, {
       ...options,
       headers,
     });
@@ -150,7 +150,7 @@ export const authApi = {
           headers.delete('Authorization');
         }
         
-        return fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:4000/api'}${endpoint}`, {
+        return fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}${endpoint}`, {
           ...options,
           headers,
         });
@@ -177,7 +177,7 @@ export const authApi = {
     // Start a new refresh request and store the promise.
     refreshTokenPromise = (async () => {
       try {
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:4000/api'}/auth/refresh`, {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken }),
@@ -214,7 +214,7 @@ export const authApi = {
   // Login
   async login(email: string, password: string): Promise<{ user: User; tokens: AuthTokens } | null> {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:4000/api'}/auth/login`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -239,7 +239,7 @@ export const authApi = {
     if (refreshToken) {
       try {
         // Inform the backend to invalidate the refresh token
-        await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:4000/api'}/auth/logout`, {
+        await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/auth/logout`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

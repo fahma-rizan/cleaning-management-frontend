@@ -54,6 +54,7 @@ import AddEditInventoryItem from "./components/admin/AddEditInventoryItem";
 import LowStockAlertsPage from "./components/admin/LowStockAlertsPage";
 import RestockPage from "./components/admin/RestockPage";
 import InventoryReportsPage from "./components/admin/InventoryReportsPage";
+import BillingApp from "./BillingApp";
 
 function AppLayout() {
   const { user, showProfileModal, setShowProfileModal, theme, handleLogout } =
@@ -651,6 +652,11 @@ export default function App() {
               element={<Navigate to="/loyalty" replace />}
             />
           </Route>
+          {/* Payment/invoice/notifications sub-app, merged in from
+              payment-invoice-notifications. Kept isolated with its own
+              AuthProvider since it duplicates several component names
+              already used above (PaymentPage, Invoice, StaffDashboard, ...). */}
+          <Route path="billing/*" element={<BillingApp />} />
         </Routes>
       </Router>
     </AppContext.Provider>

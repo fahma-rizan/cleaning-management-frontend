@@ -36,7 +36,7 @@ export class PaymentReminderService {
 
   constructor(config: Partial<PaymentReminderConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
-    this.apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:4000/api';
+    this.apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
   }
 
   // Check for invoices that need payment reminders
