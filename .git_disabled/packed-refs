@@ -1,0 +1,19 @@
+# pack-refs with: peeled fully-peeled sorted 
+0c93230c20c5f89ef0c18809f319c6b1e5579f8a refs/remotes/origin/dev
+b6b582e90e22546a87943f495d672fa79f30a9da refs/remotes/origin/feature/admin-change-profile
+d5fcdfebb013169a0f9fc9aec9aed420c45210e6 refs/remotes/origin/feature/admin-dashboard
+74045cbcf92b774363f9578522d5376d4e728fad refs/remotes/origin/feature/admin-sidebar
+0c5b4f266c66e24f00ba9eb778b87934c372541b refs/remotes/origin/feature/admin-topbar
+a95246f03eb9108bd12496dc78a37e9562ff16c6 refs/remotes/origin/feature/in
+f977f535c758fd716232e4cdb00d59e3fd7dcf8e refs/remotes/origin/feature/inventory_management
+a95246f03eb9108bd12496dc78a37e9562ff16c6 refs/remotes/origin/feature/payment
+b9dcd264f188b852415b705df647783b82971bfc refs/remotes/origin/feature/payment-invoice-notification
+032bd5844f603b45091af069c158e4dc181f8ff0 refs/remotes/origin/feature/staff-admindashboard
+6c99d124e91e0730203cb04a424a31e24a9f6368 refs/remotes/origin/feature/staff-management
+d88fb671ba2fda6291f6069f4d8ef7b99ee25114 refs/remotes/origin/feature/user_auth-loyalty_system
+8272a98dc37b426cdab2b6c5e45f8eb9b00707e0 refs/remotes/origin/frontend
+6c99d124e91e0730203cb04a424a31e24a9f6368 refs/remotes/origin/invoice
+6c99d124e91e0730203cb04a424a31e24a9f6368 refs/remotes/origin/main
+a214fd7dd8b50101cc0685997766952f32ed8693 refs/remotes/origin/services-page
+0c93230c20c5f89ef0c18809f319c6b1e5579f8a refs/remotes/origin/test
+0c93230c20c5f89ef0c18809f319c6b1e5579f8a refs/remotes/origin/uat
