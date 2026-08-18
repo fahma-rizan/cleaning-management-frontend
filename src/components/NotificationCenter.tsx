@@ -3,7 +3,7 @@ import { Bell, X, CheckCircle, Clock, Package, Star, Gift, TrendingUp, MapPin, F
 import { useNavigate } from 'react-router-dom';
 import { tokenStorage } from '../utils/auth';
 
-const API_BASE_URL = 'http://localhost:4000/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 
 export type NotificationType = 
   | 'order-confirmed' 

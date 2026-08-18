@@ -35,7 +35,7 @@ export default function PaymentPage({ user }: PaymentPageProps) {
       try {
         // We assume an endpoint to get a specific booking will exist.
         // We may need to create this endpoint on the backend.
-        const response = await fetch(`http://localhost:4000/api/bookings/${bookingId}`);
+        const response = await fetch(`http://localhost:5000/api/bookings/${bookingId}`);
         if (!response.ok) {
           throw new Error('Booking not found or failed to load.');
         }
@@ -134,7 +134,7 @@ export default function PaymentPage({ user }: PaymentPageProps) {
     };
   };
 
-const API_BASE_URL = 'http://localhost:4000/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 
 // This function transforms the frontend invoice data into the format our backend expects.
 //

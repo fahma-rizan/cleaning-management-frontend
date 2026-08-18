@@ -231,7 +231,7 @@ export default function EmailTemplates({ user }: EmailTemplatesProps) {
     const authHeader = tokens?.accessToken ? { Authorization: `Bearer ${tokens.accessToken}` } : {};
 
     try {
-      const response = await fetch('http://localhost:4000/api/email/send', {
+      const response = await fetch('http://localhost:5000/api/email/send', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', ...authHeader },
         body:    JSON.stringify({

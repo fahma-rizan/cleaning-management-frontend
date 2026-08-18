@@ -29,7 +29,7 @@ interface DBInvoice {
   createdAt: string;
 }
 
-const API = 'http://localhost:4000/api';
+const API = 'http://localhost:5000/api';
 
 function mapDBInvoiceToInvoiceData(inv: DBInvoice): InvoiceData {
   const totalDiscount = (inv.discounts || []).reduce((s, d) => s + d.amount, 0);

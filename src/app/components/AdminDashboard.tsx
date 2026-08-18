@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, ShieldCheck, CreditCard,
   PackageOpen, Star, AlertCircle, MapPin,
   FileText, Settings, LogOut, Search, Bell, ArrowLeft,
-  Menu, X,
+  Menu, X, Receipt,
 } from 'lucide-react';
 import logo from '../../assets/d0e24839a24076173960597a25c12b48f3330fdf.png';
 import type { User } from '../types';
@@ -46,6 +46,9 @@ const TAB_NAMES: Record<string, string> = {
   'admin-mgmt':         'Admin Management',
   customer:             'Customer Management',
   payments:             'Payments',
+  billing:              'Billing & Invoices',
+  'billing-financial-dashboard': 'Financial Dashboard',
+  'billing-analytics':           'Analytics',
   inventory:            'Inventory Management',
   reviews:              'Reviews',
   complaints:           'Complaints',
@@ -66,6 +69,15 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'admin-mgmt', name: 'Admin Management',     icon: ShieldCheck,  allowedRoles: ['Super Admin', 'Main Admin'] },
   { id: 'customer',   name: 'Customer Management',  icon: Users,        allowedRoles: ['Super Admin', 'Main Admin', 'Customer Support'] },
   { id: 'payments',   name: 'Payments',             icon: CreditCard,   allowedRoles: ['Super Admin', 'Main Admin'] },
+  // Billing & Invoices opens pages from the payment-invoice-notifications
+  // sub-app, mounted separately under /billing/* (its own router tree) —
+  // each sub-item below is a real navigate(), not a tab rendered inline.
+  { id: 'billing',    name: 'Billing & Invoices',   icon: Receipt,      allowedRoles: ['Super Admin', 'Main Admin'],
+    subItems: [
+      { id: 'billing-financial-dashboard', name: 'Financial Dashboard', allowedRoles: ['Super Admin', 'Main Admin'] },
+      { id: 'billing-analytics',           name: 'Analytics',           allowedRoles: ['Super Admin', 'Main Admin'] },
+    ],
+  },
   { id: 'inventory',  name: 'Inventory Management', icon: PackageOpen,  allowedRoles: ['Super Admin', 'Main Admin', 'Operations Manager'] },
   { id: 'reviews',    name: 'Reviews',              icon: Star,         allowedRoles: ['Super Admin', 'Main Admin', 'Customer Support'] },
   { id: 'complaints', name: 'Complaints',           icon: AlertCircle,  allowedRoles: ['Super Admin', 'Main Admin', 'Customer Support'] },
@@ -73,6 +85,14 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'reports',    name: 'Reports',              icon: FileText,     allowedRoles: ['Super Admin', 'Main Admin'] },
   { id: 'settings',   name: 'Settings',             icon: Settings,     allowedRoles: ['Super Admin', 'Main Admin'] },
 ];
+
+// Sub-item id → real route in the /billing/* sub-app. Add an entry here (and
+// a matching subItem + TAB_PERMISSIONS entry above) for each new billing
+// page you want reachable from this sidebar.
+const BILLING_ROUTES: Record<string, string> = {
+  'billing-financial-dashboard': '/billing/admin/financial-dashboard',
+  'billing-analytics':           '/billing/admin/analytics',
+};
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
@@ -105,6 +125,16 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
       setSidebarOpen(false);
       return;
     }
+    if (BILLING_ROUTES[id]) {
+      // Billing sub-items are real routes in a separately-mounted sub-app,
+      // not tabs rendered inside this dashboard's content area.
+      navigate(BILLING_ROUTES[id]);
+      setSidebarOpen(false);
+      return;
+    }
+    // 'billing' itself (the parent, id not in BILLING_ROUTES) just expands
+    // its sub-item list via the normal activeTab match below — it has no
+    // content of its own to render.
     setActiveTab(id);
     setSidebarOpen(false); // close sidebar on mobile after nav
   };

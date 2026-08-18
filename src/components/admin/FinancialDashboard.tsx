@@ -32,7 +32,7 @@ const formatCurrency = (amount: number): string => {
   return `Rs. ${amount.toLocaleString()}`;
 };
 
-const API_BASE_URL = 'http://localhost:4000/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 
 interface FinancialDashboardProps {
   user: User;

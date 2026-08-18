@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:4000/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 
 // All notification types across the entire system
 export type NotificationType =

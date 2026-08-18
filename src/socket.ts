@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 
 // URL of your backend server
-const URL = 'http://localhost:4000';
+const URL = 'http://localhost:5000';
 
 // Create a socket that prefers websocket but falls back to polling if needed.
 export const socket = io(URL, {

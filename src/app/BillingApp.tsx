@@ -52,8 +52,15 @@ const DEMO_ADMIN = {
   role: "admin" as const,
   adminRole: "Admin" as const,
   verified: true,
+  // FIX: This was a stale JWT signed by a different backend/secret than the
+  // one actually running (backend/.env JWT_SECRET) — every "protected" call
+  // made under the demo admin (create invoice, refund/price-reduction
+  // request+approve, email send, notifications, audit log) failed with 401
+  // "Not authorized, token failed." regardless of anything else being
+  // correct. Replaced with a long-lived token signed for the real seeded
+  // admin user (admin@cloudlaundry.lk) so `protect` accepts it.
   token:
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiYWRtaW4tMDAxIiwiZW1haWwiOiJhZG1pbkBjbG91ZGxhdW5kcnkubGsiLCJyb2xlIjoiYWRtaW4ifSwiaWF0IjoxNzgxMTk5OTA5LCJleHAiOjE3ODM3OTE5MDl9.P0zEwvcWh9yX41NHOlqrrGVV4-yHQe-LbHU12eKkZ14",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhMmM0YTAzMzI3OTM2NGM5OWQ4ZDMyNyIsImlhdCI6MTc4NzAzNTM4NywiZXhwIjoxODE4NTcxMzg3fQ.5FeBB6lcWBujPX_PkzLNIHebAF6DJu0jHXqhV75Y08M",
 };
 
 function BillingContent() {

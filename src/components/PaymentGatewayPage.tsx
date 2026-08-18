@@ -44,7 +44,7 @@ const PaymentGatewayPage = () => {
       try {
         const token = localStorage.getItem('token');
         const res = await axios.post(
-          'http://localhost:4000/api/payhere/generate-hash',
+          'http://localhost:5000/api/payhere/generate-hash',
           { bookingId, paymentMethod: effectivePaymentMethod },
           { headers: { 'x-auth-token': token } }
         );
@@ -102,7 +102,7 @@ const PaymentGatewayPage = () => {
                 // succeeded and PayHere's IPN already updated us. If it's
                 // still pending, the user cancelled or payment failed.
                 try {
-                  const res = await fetch(`http://localhost:4000/api/bookings/${bookingId}`);
+                  const res = await fetch(`http://localhost:5000/api/bookings/${bookingId}`);
                   const booking = await res.json();
                   const paid = booking.status === 'confirmed' || booking.status === 'completed';
                   navigate(paid ? '/payment-success' : '/payment-failed', {

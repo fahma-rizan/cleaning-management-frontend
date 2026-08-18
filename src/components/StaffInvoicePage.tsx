@@ -51,7 +51,7 @@ export default function StaffInvoicePage({ user }: StaffInvoicePageProps) {
   const [loading,       setLoading]       = useState(false);
   const [error,         setError]         = useState<string | null>(null);
 
-  const API_BASE_URL = 'http://localhost:4000/api';
+  const API_BASE_URL = 'http://localhost:5000/api';
 
   const getInvoiceImage = () => {
     if (items.length === 0) return logoImg;

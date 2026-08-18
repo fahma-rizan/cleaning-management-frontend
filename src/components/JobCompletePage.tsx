@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { CheckCircle, Loader, AlertCircle, MapPin, Calendar, User, Package } from 'lucide-react';
 import { tokenStorage } from '../utils/auth';
 
-const API = 'http://localhost:4000/api';
+const API = 'http://localhost:5000/api';
 
 interface Booking {
   _id: string;

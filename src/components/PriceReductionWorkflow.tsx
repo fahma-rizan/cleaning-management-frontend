@@ -51,7 +51,7 @@ export default function PriceReductionWorkflow({ user }: PriceReductionWorkflowP
   const [approvedAmount, setApprovedAmount]   = useState<number | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
 
-  const API = 'http://localhost:4000/api';
+  const API = 'http://localhost:5000/api';
 
   useEffect(() => {
     const fetchInvoices = async () => {

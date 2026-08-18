@@ -3,7 +3,7 @@ import { Download, FileText, Filter, TrendingUp, TrendingDown, DollarSign, Calen
 import type { User } from '../types';
 import DemoTopBar from './DemoTopBar';
 
-const API_BASE_URL = 'http://localhost:4000/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 
 interface PaymentReportExportProps {
   user: User;

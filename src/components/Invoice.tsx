@@ -95,7 +95,7 @@ export default function Invoice({ user }: InvoiceProps) {
     const fetchInvoice = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`http://localhost:4000/api/invoices/booking/${bookingId}`);
+        const response = await fetch(`http://localhost:5000/api/invoices/booking/${bookingId}`);
         if (!response.ok) throw new Error('Invoice not found');
         const data: DBInvoice = await response.json();
         // FIX: map the raw DB document into the shape InvoiceGenerator expects

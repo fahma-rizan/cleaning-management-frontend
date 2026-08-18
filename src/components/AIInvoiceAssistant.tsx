@@ -151,7 +151,7 @@ const buildInvoiceData = (aiData: any): InvoiceData => {
 
 export default function AIInvoiceAssistant({ user }: AIInvoiceAssistantProps) {
   const navigate = useNavigate();
-  const API = 'http://localhost:4000/api';
+  const API = 'http://localhost:5000/api';
   const [aiEnabled, setAiEnabled] = useState<boolean | null>(null);
   const [messages, setMessages]     = useState<Message[]>([]);
   const [input, setInput]           = useState('');
@@ -280,7 +280,7 @@ export default function AIInvoiceAssistant({ user }: AIInvoiceAssistantProps) {
     };
 
     try {
-      const res = await fetch('http://localhost:4000/api/invoices', {
+      const res = await fetch('http://localhost:5000/api/invoices', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', ...authHeader },
         body:    JSON.stringify(payload),

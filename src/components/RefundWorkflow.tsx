@@ -59,7 +59,7 @@ export default function RefundWorkflow({ user }: RefundWorkflowProps) {
         //       any actual invoice even with auth fixed.
         // Switched to GET /invoices (all invoices, admin-only) so any
         // invoice can be selected for a refund request.
-        const response = await fetch('http://localhost:4000/api/invoices', {
+        const response = await fetch('http://localhost:5000/api/invoices', {
           headers: authHeader,
         });
         if (!response.ok) {
@@ -138,7 +138,7 @@ export default function RefundWorkflow({ user }: RefundWorkflowProps) {
 
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch('http://localhost:4000/api/refunds/request', {
+      const response = await fetch('http://localhost:5000/api/refunds/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ invoiceId: selectedBooking._id, reason: refundReason }),
@@ -179,7 +179,7 @@ export default function RefundWorkflow({ user }: RefundWorkflowProps) {
 
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`http://localhost:4000/api/refunds/approve/${refundId}`, {
+      const response = await fetch(`http://localhost:5000/api/refunds/approve/${refundId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({}),
@@ -249,7 +249,7 @@ export default function RefundWorkflow({ user }: RefundWorkflowProps) {
 
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`http://localhost:4000/api/refunds/reject/${refundId}`, {
+      const response = await fetch(`http://localhost:5000/api/refunds/reject/${refundId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ reason }),

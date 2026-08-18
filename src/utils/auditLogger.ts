@@ -33,7 +33,7 @@ export interface AuditLogEntry {
   status: 'success' | 'failure' | 'warning';
 }
 
-const API_BASE_URL = 'http://localhost:4000/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 
 export interface AuditLogger {
   log:            (entry: Omit<AuditLogEntry, '_id' | 'timestamp' | 'ipAddress' | 'userAgent'>) => Promise<void>;
