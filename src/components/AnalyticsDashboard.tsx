@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   BarChart3,
@@ -56,6 +57,7 @@ interface CustomerData {
 const API_BASE_URL = 'http://localhost:5000/api';
 
 export default function AnalyticsDashboard({ user }: AnalyticsDashboardProps) {
+  const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -229,8 +231,13 @@ export default function AnalyticsDashboard({ user }: AnalyticsDashboardProps) {
               <option value="90d">Last 90 days</option>
               <option value="1y">Last year</option>
             </select>
+            {/* FIX: this used to only trigger a client-side JSON blob download
+                (exportReport()) — it never navigated anywhere, so it looked
+                like the button did "something else" instead of opening the
+                real Payment Report page. Now takes you to the dedicated
+                report page; the JSON download is still one click away from there. */}
             <button
-              onClick={exportReport}
+              onClick={() => navigate('/billing/payment-report')}
               className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
             >
               <Download className="w-4 h-4" />

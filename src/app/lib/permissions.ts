@@ -22,6 +22,7 @@ export const TAB_PERMISSIONS: Record<string, AdminRole[]> = {
   'inventory':            ['Super Admin', 'Main Admin', 'Operations Manager'],
   'reviews':              ['Super Admin', 'Main Admin', 'Customer Support'],
   'complaints':           ['Super Admin', 'Main Admin', 'Customer Support'],
+  'billing-email-templates': ['Super Admin', 'Main Admin'],
   'gps':                  ['Super Admin', 'Main Admin', 'Operations Manager'],
   'reports':              ['Super Admin', 'Main Admin'],
   'settings':             ['Super Admin', 'Main Admin'],

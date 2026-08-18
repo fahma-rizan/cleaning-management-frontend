@@ -26,7 +26,6 @@ import WorkflowAssistant from "../components/admin/WorkflowAssistant";
 // Lazy load heavy/reporting components
 const Invoice = lazy(() => import("../components/Invoice"));
 const PaymentReportExport = lazy(() => import("../components/PaymentReportExport"));
-const RefundWorkflow = lazy(() => import("../components/RefundWorkflow"));
 const EmailTemplates = lazy(() => import("../components/EmailTemplates"));
 const StaffInvoicePage = lazy(() => import("../components/StaffInvoicePage"));
 const StaffInvoiceViewer = lazy(() => import("../components/StaffInvoiceViewer"));
@@ -126,7 +125,6 @@ function BillingContent() {
           <Route path="booking-success" element={<BookingSuccessPage user={currentUser} />} />
           <Route path="invoice/:bookingId" element={<Invoice user={currentUser} />} />
           <Route path="payment-report" element={<PaymentReportExport user={currentUser} />} />
-          <Route path="refund" element={<RefundWorkflow user={currentUser} />} />
           <Route path="email-templates" element={<EmailTemplates user={currentUser} />} />
           <Route path="staff-invoice/new" element={<StaffInvoicePage user={currentUser} />} />
           <Route path="staff-invoice/:invoiceNumber" element={<StaffInvoiceViewer user={currentUser} />} />

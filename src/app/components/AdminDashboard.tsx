@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, ShieldCheck, CreditCard,
   PackageOpen, Star, AlertCircle, MapPin,
   FileText, Settings, LogOut, Search, Bell, ArrowLeft,
-  Menu, X, Receipt,
+  Menu, X, Receipt, Mail,
 } from 'lucide-react';
 import logo from '../../assets/d0e24839a24076173960597a25c12b48f3330fdf.png';
 import type { User } from '../types';
@@ -52,6 +52,7 @@ const TAB_NAMES: Record<string, string> = {
   inventory:            'Inventory Management',
   reviews:              'Reviews',
   complaints:           'Complaints',
+  'billing-email-templates': 'Email Templates',
   gps:                  'GPS Tracking',
   reports:              'Reports',
   settings:             'Settings',
@@ -81,6 +82,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'inventory',  name: 'Inventory Management', icon: PackageOpen,  allowedRoles: ['Super Admin', 'Main Admin', 'Operations Manager'] },
   { id: 'reviews',    name: 'Reviews',              icon: Star,         allowedRoles: ['Super Admin', 'Main Admin', 'Customer Support'] },
   { id: 'complaints', name: 'Complaints',           icon: AlertCircle,  allowedRoles: ['Super Admin', 'Main Admin', 'Customer Support'] },
+  { id: 'billing-email-templates', name: 'Email Templates', icon: Mail, allowedRoles: ['Super Admin', 'Main Admin'] },
   { id: 'gps',        name: 'GPS Tracking',         icon: MapPin,       allowedRoles: ['Super Admin', 'Main Admin', 'Operations Manager'] },
   { id: 'reports',    name: 'Reports',              icon: FileText,     allowedRoles: ['Super Admin', 'Main Admin'] },
   { id: 'settings',   name: 'Settings',             icon: Settings,     allowedRoles: ['Super Admin', 'Main Admin'] },
@@ -92,6 +94,7 @@ const NAV_ITEMS: NavItem[] = [
 const BILLING_ROUTES: Record<string, string> = {
   'billing-financial-dashboard': '/billing/admin/financial-dashboard',
   'billing-analytics':           '/billing/admin/analytics',
+  'billing-email-templates':     '/billing/email-templates',
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
