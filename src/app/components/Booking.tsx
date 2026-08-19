@@ -9,6 +9,7 @@ import AIEstimator from './AIEstimator';
 import DryCleaningPriceList from './DryCleaningPriceList';
 import WashingPressingPriceList from './WashingPressingPriceList';
 import PressingPriceList from './PressingPriceList';
+import AddressInput, { emptyAddress, isAddressComplete, type StructuredAddress } from './AddressInput';
 import type { User } from '../types';
 import type { FormEvent } from 'react';
 import { fetchWithAuth } from '../utils/api';
@@ -86,7 +87,8 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
   const [bookingData, setBookingData] = useState({
     date: '',
     time: '',
-    address: '',
+    address: '', // flattened string — still sent to backend, still what Payment/Invoice/GPS/dashboard read
+    addressDetails: emptyAddress as StructuredAddress, // structured breakdown, captured by AddressInput
     houseSize: 'medium',
     rooms: 2,
     bathrooms: 1,
@@ -182,7 +184,7 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
   const curtainServiceTypes = [
     { id: 'dry-clean-press', name: 'Dry Cleaning and Pressing', price: 2500, description: 'Best for delicate fabrics and deep cleaning' },
     { id: 'laundry-press', name: 'Laundry and Pressing', price: 3500, description: 'Standard wash and professional pressing' },
-    { id: 'premium', name: 'Curtain Premium Service', price: 4500, description: 'Highest level of care for luxury curtains' },
+    { id: 'premium', name: 'Curtain Premium Service', price: 4500, description: 'Highest level of care for luxury curtains. Includes Curtain Removal,Pickup & Delivery and Installation' },
   ];
 
   // Curtain cleaning options
@@ -279,8 +281,8 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
     const errors: Record<string, string> = {};
     if (!bookingData.date) errors.date = 'Please select a service date.';
     if (!bookingData.time) errors.time = 'Please select a time slot.';
-    if (!bookingData.address.trim() || bookingData.address.trim().length < 5)
-      errors.address = 'Please enter a full address (at least 5 characters).';
+    if (!isAddressComplete(bookingData.addressDetails))
+      errors.address = 'Please enter a complete address (house/street and city).';
     if (isLaundryService && bookingData.laundryServices.length === 0)
       errors.laundryServices = 'Please select at least one laundry service.';
     if ((isDryCleaningService || isWashingPressingService || isPressingOnlyService) && estimatedPrice === 0)
@@ -482,16 +484,15 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                       </select>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Full Address</label>
-                    <textarea
-                      value={bookingData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      rows={3}
-                      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white resize-none"
-                      placeholder="Enter full address..."
-                    />
-                  </div>
+                  <AddressInput
+                    value={bookingData.addressDetails}
+                    onChange={(details, flat) => {
+                      handleInputChange('addressDetails', details);
+                      handleInputChange('address', flat);
+                    }}
+                    label="Full Address"
+                    error={formErrors.address}
+                  />
                 </div>
               </div>
             )}
@@ -598,16 +599,15 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                       </select>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup & Delivery Address</label>
-                    <textarea
-                      value={bookingData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      rows={3}
-                      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white resize-none"
-                      placeholder="Enter full address for pickup..."
-                    />
-                  </div>
+                  <AddressInput
+                    value={bookingData.addressDetails}
+                    onChange={(details, flat) => {
+                      handleInputChange('addressDetails', details);
+                      handleInputChange('address', flat);
+                    }}
+                    label="Pickup & Delivery Address"
+                    error={formErrors.address}
+                  />
                 </div>
               </div>
             )}
@@ -690,16 +690,15 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                       </select>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup & Delivery Address</label>
-                    <textarea
-                      value={bookingData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      rows={3}
-                      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white resize-none"
-                      placeholder="Enter full address for pickup and delivery..."
-                    />
-                  </div>
+                  <AddressInput
+                    value={bookingData.addressDetails}
+                    onChange={(details, flat) => {
+                      handleInputChange('addressDetails', details);
+                      handleInputChange('address', flat);
+                    }}
+                    label="Pickup & Delivery Address"
+                    error={formErrors.address}
+                  />
                 </div>
               </div>
             )}
@@ -782,16 +781,15 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                       </select>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup & Delivery Address</label>
-                    <textarea
-                      value={bookingData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      rows={3}
-                      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white resize-none"
-                      placeholder="Enter full address for pickup and delivery..."
-                    />
-                  </div>
+                  <AddressInput
+                    value={bookingData.addressDetails}
+                    onChange={(details, flat) => {
+                      handleInputChange('addressDetails', details);
+                      handleInputChange('address', flat);
+                    }}
+                    label="Pickup & Delivery Address"
+                    error={formErrors.address}
+                  />
                 </div>
               </div>
             )}
@@ -874,16 +872,15 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                       </select>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup & Delivery Address</label>
-                    <textarea
-                      value={bookingData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      rows={3}
-                      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white resize-none"
-                      placeholder="Enter full address for pickup and delivery..."
-                    />
-                  </div>
+                  <AddressInput
+                    value={bookingData.addressDetails}
+                    onChange={(details, flat) => {
+                      handleInputChange('addressDetails', details);
+                      handleInputChange('address', flat);
+                    }}
+                    label="Pickup & Delivery Address"
+                    error={formErrors.address}
+                  />
                 </div>
               </div>
             )}
@@ -1011,16 +1008,15 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                       </select>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Service Address</label>
-                    <textarea
-                      value={bookingData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      rows={3}
-                      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white resize-none"
-                      placeholder="Enter the address where cleaning is required..."
-                    />
-                  </div>
+                  <AddressInput
+                    value={bookingData.addressDetails}
+                    onChange={(details, flat) => {
+                      handleInputChange('addressDetails', details);
+                      handleInputChange('address', flat);
+                    }}
+                    label="Service Address"
+                    error={formErrors.address}
+                  />
                 </div>
               </div>
             )}
@@ -1156,16 +1152,15 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                       </select>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup Address</label>
-                    <textarea
-                      value={bookingData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      rows={3}
-                      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white resize-none"
-                      placeholder="Enter full address for pickup and delivery..."
-                    />
-                  </div>
+                  <AddressInput
+                    value={bookingData.addressDetails}
+                    onChange={(details, flat) => {
+                      handleInputChange('addressDetails', details);
+                      handleInputChange('address', flat);
+                    }}
+                    label="Pickup Address"
+                    error={formErrors.address}
+                  />
                 </div>
               </div>
             )}
