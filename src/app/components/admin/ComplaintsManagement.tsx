@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Search,
   Clock,
@@ -17,13 +17,19 @@ import { toast } from "sonner";
 
 interface Complaint {
   _id: string;
+  bookingId: string;
   title: string;
   priority: "High" | "Medium" | "Low";
   description: string;
   customerName: string;
+  customerEmail: string;
+  customerPhone: string;
   serviceName: string;
   serviceDate: string;
+  paidAmount: number;
+  serviceStaffName: string;
   assignedStaffName: string;
+  assignedStaff: string;
   status: "Pending" | "In Progress" | "Resolved";
   notes: Array<{ adminName: string; note: string; createdAt: string }>;
   createdAt: string;
@@ -71,9 +77,30 @@ export function ComplaintsManagement() {
   const [staffList, setStaffList] = useState<{ _id: string; name: string }[]>(
     [],
   );
+  const [staffSearchQuery, setStaffSearchQuery] = useState("");
+  const [staffDropdownOpen, setStaffDropdownOpen] = useState(false);
+  const staffDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        staffDropdownRef.current &&
+        !staffDropdownRef.current.contains(event.target as Node)
+      ) {
+        setStaffDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredStaffOptions = staffList.filter((staff) =>
+    staff.name.toLowerCase().includes(staffSearchQuery.toLowerCase()),
+  );
+
   useEffect(() => {
     staffAPI
-      .getAll()
+      .getAvailable()
       .then((data) => setStaffList(data))
       .catch((err) => console.error(err));
   }, []);
@@ -100,11 +127,13 @@ export function ComplaintsManagement() {
   const handleViewDetails = (complaint: Complaint) => {
     setSelectedComplaint(complaint);
     setModalForm({
-      assignedStaff: complaint.assignedStaffName,
+      assignedStaff: complaint.assignedStaff,
       status: complaint.status,
       priority: complaint.priority,
       newNote: "",
     });
+    setStaffSearchQuery(complaint.assignedStaffName || "");
+    setStaffDropdownOpen(false);
     setIsModalOpen(true);
   };
 
@@ -284,16 +313,18 @@ export function ComplaintsManagement() {
               <div className="space-y-3 flex-1">
                 <div className="flex items-center flex-wrap gap-2">
                   <span className="text-gray-400 font-medium">
-                    {complaint._id}
+                    {complaint.serviceName}
                   </span>
+                </div>
+
+                <div className="flex items-center flex-wrap gap-2">
                   <h3 className="text-xl font-bold text-gray-900">
                     {complaint.title}
                   </h3>
+                  <p className="text-gray-600 leading-relaxed text-lg max-w-4xl">
+                    {complaint.description}
+                  </p>
                 </div>
-
-                <p className="text-gray-600 leading-relaxed text-lg max-w-4xl">
-                  {complaint.description}
-                </p>
 
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-gray-500 font-medium text-sm pt-2">
                   <span>By {complaint.customerName}</span>
@@ -369,10 +400,11 @@ export function ComplaintsManagement() {
             <div className="p-6 space-y-6">
               {/* Complaint ID and Priority */}
               <div>
-                <div className="text-gray-600 mb-2">
-                  Complaint ID: #{selectedComplaint._id}
-                </div>
-                <div className="flex items-center gap-2 mb-2">
+                <h3 className="text-lg font-bold mb-3">Complaint Details</h3>
+                <div className="grid grid-cols-[140px_1fr] gap-y-2">
+                  <span className="text-gray-600">Complaint ID:</span>
+                  <span className="text-gray-900">#{selectedComplaint._id}</span>
+
                   <span className="text-gray-600">Priority:</span>
                   <div className="flex items-center gap-2">
                     {selectedComplaint.priority === "High" && (
@@ -388,11 +420,13 @@ export function ComplaintsManagement() {
                       {selectedComplaint.priority}
                     </span>
                   </div>
-                </div>
-                <div className="text-gray-600">
-                  Status:{" "}
+
+                  <span className="text-gray-600">Status:</span>
+                  <span className="text-gray-900">{selectedComplaint.status}</span>
+
+                  <span className="text-gray-600">Assigned Staff:</span>
                   <span className="text-gray-900">
-                    {selectedComplaint.status}
+                    {selectedComplaint.assignedStaffName || "Unassigned"}
                   </span>
                 </div>
               </div>
@@ -402,38 +436,52 @@ export function ComplaintsManagement() {
                 <h3 className="text-lg font-bold mb-3">
                   Customer Information:
                 </h3>
-                <div className="space-y-2">
-                  <div className="text-gray-600">
-                    Name:{" "}
-                    <span className="text-gray-900">
-                      {selectedComplaint.customerName}
-                    </span>
-                  </div>
-                  <div className="text-gray-600">
-                    Email: <span className="text-gray-900">N/A</span>
-                  </div>
-                  <div className="text-gray-600">
-                    Phone: <span className="text-gray-900">N/A</span>
-                  </div>
+                <div className="grid grid-cols-[140px_1fr] gap-y-2">
+                  <span className="text-gray-600">Name:</span>
+                  <span className="text-gray-900">
+                    {selectedComplaint.customerName}
+                  </span>
+
+                  <span className="text-gray-600">Email:</span>
+                  <span className="text-gray-900">
+                    {selectedComplaint.customerEmail || "N/A"}
+                  </span>
+
+                  <span className="text-gray-600">Phone:</span>
+                  <span className="text-gray-900">
+                    {selectedComplaint.customerPhone || "N/A"}
+                  </span>
                 </div>
               </div>
 
               {/* Related Service */}
               <div>
                 <h3 className="text-lg font-bold mb-3">Related Service</h3>
-                <div className="space-y-2">
-                  <div className="text-gray-600">
-                    Service:{" "}
-                    <span className="text-gray-900">
-                      {selectedComplaint.serviceName}
-                    </span>
-                  </div>
-                  <div className="text-gray-600">
-                    Date:{" "}
-                    <span className="text-gray-900">
-                      {selectedComplaint.serviceDate}
-                    </span>
-                  </div>
+                <div className="grid grid-cols-[140px_1fr] gap-y-2">
+                  <span className="text-gray-600">Booking ID:</span>
+                  <span className="text-gray-900">
+                    {selectedComplaint.bookingId}
+                  </span>
+
+                  <span className="text-gray-600">Service:</span>
+                  <span className="text-gray-900">
+                    {selectedComplaint.serviceName}
+                  </span>
+
+                  <span className="text-gray-600">Date:</span>
+                  <span className="text-gray-900">
+                    {new Date(selectedComplaint.serviceDate).toLocaleDateString()}
+                  </span>
+
+                  <span className="text-gray-600">Paid Amount:</span>
+                  <span className="text-gray-900">
+                    LKR {selectedComplaint.paidAmount.toLocaleString()}
+                  </span>
+
+                  <span className="text-gray-600">Staff:</span>
+                  <span className="text-gray-900">
+                    {selectedComplaint.serviceStaffName || "Unassigned"}
+                  </span>
                 </div>
               </div>
 
@@ -488,23 +536,52 @@ export function ComplaintsManagement() {
               <div className="space-y-3">
                 <div>
                   <label className="text-gray-600 block mb-2">Assign to:</label>
-                  <select
-                    value={modalForm.assignedStaff}
-                    onChange={(e) =>
-                      setModalForm({
-                        ...modalForm,
-                        assignedStaff: e.target.value,
-                      })
-                    }
-                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent"
-                  >
-                    <option value="">Select Staff</option>
-                    {staffList.map((staff) => (
-                      <option key={staff._id} value={staff._id}>
-                        {staff.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative" ref={staffDropdownRef}>
+                    <Input
+                      value={staffSearchQuery}
+                      onChange={(e) => {
+                        setStaffSearchQuery(e.target.value);
+                        setStaffDropdownOpen(true);
+                        // Typing invalidates whatever was selected before,
+                        // until the admin picks a match from the list.
+                        setModalForm((prev) => ({ ...prev, assignedStaff: "" }));
+                      }}
+                      onFocus={() => setStaffDropdownOpen(true)}
+                      placeholder="Type to search staff..."
+                      className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-gray-900 focus-visible:ring-2 focus-visible:ring-purple-600"
+                    />
+                    {staffDropdownOpen && (
+                      <div className="absolute z-10 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+                        {filteredStaffOptions.length > 0 ? (
+                          filteredStaffOptions.map((staff) => (
+                            <button
+                              key={staff._id}
+                              type="button"
+                              onClick={() => {
+                                setModalForm({
+                                  ...modalForm,
+                                  assignedStaff: staff._id,
+                                });
+                                setStaffSearchQuery(staff.name);
+                                setStaffDropdownOpen(false);
+                              }}
+                              className={`w-full text-left px-4 py-2.5 text-sm hover:bg-purple-50 transition-colors ${
+                                modalForm.assignedStaff === staff._id
+                                  ? "bg-purple-50 text-purple-700 font-semibold"
+                                  : "text-gray-700"
+                              }`}
+                            >
+                              {staff.name}
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-4 py-2.5 text-sm text-gray-500">
+                            No matching staff
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div>

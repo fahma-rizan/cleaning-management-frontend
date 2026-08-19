@@ -14,7 +14,15 @@ import { Badge } from "../ui/badge";
 import { toast } from "sonner";
 import { Pagination } from "../ui/pagination";
 import { staffAPI, getPhotoUrl } from "../../lib/api";
-import { isValidEmail, isValidFullName, isValidPhone } from "../../lib/validation";
+import { isValidEmail, isValidFullName, isValidPhone, isValidNIC } from "../../lib/validation";
+
+interface CompletedJob {
+  bookingId: string;
+  service: string;
+  customerName: string;
+  date: string;
+  jobType: "Solo" | "Group";
+}
 
 interface StaffMember {
   _id: string;
@@ -28,6 +36,7 @@ interface StaffMember {
   jobsCompleted: number;
   staffStatus: "Active" | "Inactive";
   profilePhoto: string;
+  completedJobs?: CompletedJob[];
 }
 
 const normalizeStaffMember = (staff: any): StaffMember => ({
@@ -70,6 +79,7 @@ export function StaffManagement() {
   }, []);
 
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
+  const [jobsLoading, setJobsLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -144,6 +154,14 @@ export function StaffManagement() {
     }
     if (!isValidPhone(formData.phone)) {
       toast.error("Phone number must contain 10 digits.");
+      return;
+    }
+    if (!isValidNIC(formData.nic)) {
+      toast.error("Please enter a valid NIC (e.g. 123456789V or 200012345678).");
+      return;
+    }
+    if (formData.specializations.length === 0) {
+      toast.error("Please select at least 1 specialization.");
       return;
     }
 
@@ -407,7 +425,7 @@ export function StaffManagement() {
 
           <div className="space-y-4">
             <label className="text-sm font-semibold text-gray-700 block">
-              Specification (Select one or more)
+              Specializations (Select one or more)
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {specificationsList.map((spec) => (
@@ -647,6 +665,12 @@ export function StaffManagement() {
                             onClick={() => {
                               setSelectedStaff(staff);
                               setActiveActionMenu(null);
+                              setJobsLoading(true);
+                              staffAPI
+                                .getById(staff._id)
+                                .then((data) => setSelectedStaff(normalizeStaffMember(data)))
+                                .catch((err) => console.error(err))
+                                .finally(() => setJobsLoading(false));
                             }}
                             className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
                           >
@@ -824,6 +848,56 @@ export function StaffManagement() {
                     </span>
                   )}
                 </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
+                  Completed Jobs
+                </p>
+                {jobsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="w-6 h-6 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : selectedStaff.completedJobs && selectedStaff.completedJobs.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedStaff.completedJobs.map((job) => (
+                      <div
+                        key={job.bookingId}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono text-xs font-bold text-purple-600">
+                            {job.bookingId}
+                          </span>
+                          <span className="text-sm text-gray-900">
+                            {job.service}
+                          </span>
+                          <span className="text-sm text-gray-500">
+                            {job.customerName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm text-gray-500">
+                            {job.date}
+                          </span>
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                              job.jobType === "Group"
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {job.jobType}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-500">
+                    No completed jobs yet.
+                  </div>
+                )}
               </div>
             </div>
           </div>

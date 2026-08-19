@@ -16,16 +16,39 @@ import { reportAPI, staffAPI } from "../../lib/api";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+// Local YYYY-MM-DD (not toISOString, which shifts by timezone offset and
+// can land on the wrong day) — matches what <input type="date"> expects.
+const toDateInputValue = (d: Date) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const addDays = (dateStr: string, days: number) => {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return toDateInputValue(d);
+};
+
+// Default range: today, and one month before it — so the "From"/"To"
+// fields open with a sensible one-month window instead of empty.
+const getDefaultBookingDateRange = () => {
+  const to = new Date();
+  const from = new Date();
+  from.setMonth(from.getMonth() - 1);
+  return { from: toDateInputValue(from), to: toDateInputValue(to) };
+};
+
 export function ReportsManagement() {
   const [bookingReport, setBookingReport] = useState({
-    from: "",
-    to: "",
+    ...getDefaultBookingDateRange(),
     service: "All Services",
     status: "All Statuses",
   });
 
   const [paymentReport, setPaymentReport] = useState({
-    period: "This Month",
+    period: "All Time",
     method: "All Methods",
   });
 
@@ -36,7 +59,7 @@ export function ReportsManagement() {
 
   const [customerReport, setCustomerReport] = useState({
     status: "All",
-    period: "Last Month",
+    period: "This Month",
   });
 
   // Report results
@@ -129,7 +152,7 @@ export function ReportsManagement() {
         if (res.summary) setReportSummary(res.summary);
       } else if (type === "payment") {
         const filters: any = {};
-        if (paymentReport.period !== "All")
+        if (paymentReport.period !== "All Time")
           filters.period = paymentReport.period;
         if (paymentReport.method !== "All Methods") {
           // Map display name to database value
@@ -410,12 +433,22 @@ export function ReportsManagement() {
                   <Input
                     type="date"
                     value={bookingReport.from}
-                    onChange={(e) =>
+                    max={
+                      bookingReport.to
+                        ? addDays(bookingReport.to, -1)
+                        : undefined
+                    }
+                    onChange={(e) => {
+                      const newFrom = e.target.value;
+                      // Native max already blocks picking a "From" on/after
+                      // "To" — this is just a safety net for browsers that
+                      // allow typing past it.
+                      if (bookingReport.to && newFrom >= bookingReport.to) return;
                       setBookingReport({
                         ...bookingReport,
-                        from: e.target.value,
-                      })
-                    }
+                        from: newFrom,
+                      });
+                    }}
                     className="h-11 rounded-xl border-gray-200 focus:ring-purple-500"
                   />
                 </div>
@@ -427,9 +460,16 @@ export function ReportsManagement() {
                 <Input
                   type="date"
                   value={bookingReport.to}
-                  onChange={(e) =>
-                    setBookingReport({ ...bookingReport, to: e.target.value })
+                  min={
+                    bookingReport.from
+                      ? addDays(bookingReport.from, 1)
+                      : undefined
                   }
+                  onChange={(e) => {
+                    const newTo = e.target.value;
+                    if (bookingReport.from && newTo <= bookingReport.from) return;
+                    setBookingReport({ ...bookingReport, to: newTo });
+                  }}
                   className="h-11 rounded-xl border-gray-200 focus:ring-purple-500"
                 />
               </div>
@@ -529,9 +569,11 @@ export function ReportsManagement() {
                   setPaymentReport({ ...paymentReport, period: e.target.value })
                 }
               >
+                <option>All Time</option>
                 <option>This Month</option>
-                <option>Last Month</option>
-                <option>This Quarter</option>
+                <option>Last 3 Months</option>
+                <option>Last 6 Months</option>
+                <option>This Year</option>
               </select>
             </div>
 
@@ -692,7 +734,6 @@ export function ReportsManagement() {
                 <option value="All">All Customers</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
-                <option value="blocked">Blocked</option>
               </select>
             </div>
 
@@ -710,7 +751,7 @@ export function ReportsManagement() {
                   })
                 }
               >
-                <option>Last Month</option>
+                <option>This Month</option>
                 <option>Last 3 Months</option>
                 <option>Last 6 Months</option>
                 <option>All Time</option>

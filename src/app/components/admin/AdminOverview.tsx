@@ -261,7 +261,7 @@ export default function AdminOverview() {
         {/* Pie Chart */}
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <h3 className="text-lg font-bold text-gray-800 mb-4">
-            Service Breakdown
+            Total Service Breakdown
           </h3>
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">

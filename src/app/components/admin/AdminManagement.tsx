@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { adminAPI } from "../../lib/api";
+import { adminAPI, getPhotoUrl } from "../../lib/api";
 import {
   ShieldCheck,
   Search,
@@ -17,6 +17,8 @@ import {
   Ban,
   Phone,
   MapPin,
+  CreditCard,
+  Camera,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -31,7 +33,7 @@ import {
   getAssignableRoles,
 } from "../../lib/permissions";
 import { normalizePhoneNumber } from "../../lib/phone";
-import { isValidFullName, isValidEmail, isValidPhone } from "../../lib/validation";
+import { isValidFullName, isValidEmail, isValidPhone, isValidNIC } from "../../lib/validation";
 import type { User } from "../../types";
 
 interface AdminUser {
@@ -40,6 +42,8 @@ interface AdminUser {
   email: string;
   phone: string;
   address: string;
+  nic?: string;
+  profilePhoto?: string;
   adminRole: AdminRole;
   adminStatus: "Active" | "Inactive";
   lastActive: string;
@@ -76,12 +80,16 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
+    nic: "",
     phone: "",
     address: "",
     password: "",
     role: "Main Admin" as AdminRole,
     status: "Active" as "Active" | "Inactive",
   });
+
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string>("");
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -124,26 +132,40 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
       setFormData({
         name: admin.name,
         email: admin.email,
+        nic: admin.nic || "",
         phone: admin.phone,
         address: admin.address,
         password: "",
         role: admin.adminRole,
         status: admin.adminStatus,
       });
+      setPhotoFile(null);
+      setPhotoPreview(admin.profilePhoto || "");
     } else {
       setEditingAdmin(null);
       setShowPassword(false);
       setFormData({
         name: "",
         email: "",
+        nic: "",
         phone: "",
         address: "",
         password: "",
         role: assignable[0] ?? "Operations Manager",
         status: "Active",
       });
+      setPhotoFile(null);
+      setPhotoPreview("");
     }
     setIsModalOpen(true);
+  };
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPhotoFile(file);
+      setPhotoPreview(URL.createObjectURL(file));
+    }
   };
 
   const handleSave = async () => {
@@ -168,6 +190,10 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
       toast.error("Contact number must contain 10 digits.");
       return;
     }
+    if (!editingAdmin && !isValidNIC(formData.nic)) {
+      toast.error("Please enter a valid NIC (e.g. 123456789V or 200012345678).");
+      return;
+    }
     if (!formData.address.trim()) {
       toast.error("Address must not be empty.");
       return;
@@ -188,9 +214,10 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
           role: formData.role,
           status: formData.status,
           name: formData.name,
+          nic: formData.nic,
           phone: normalizedPhone,
           address: formData.address,
-        });
+        }, photoFile);
         setAdmins((prev) =>
           prev.map((a) => (a._id === editingAdmin._id ? updated : a)),
         );
@@ -199,10 +226,11 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
           name: formData.name,
           email: formData.email,
           password: formData.password,
+          nic: formData.nic,
           phone: normalizedPhone,
           address: formData.address,
           role: formData.role,
-        });
+        }, photoFile);
         setAdmins((prev) => [...prev, newAdmin]);
       }
       setIsModalOpen(false);
@@ -357,8 +385,16 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
               >
                 <td className="px-4 sm:px-6 py-5">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-bold shrink-0">
-                      {admin.name.charAt(0)}
+                    <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-bold shrink-0 overflow-hidden">
+                      {admin.profilePhoto ? (
+                        <img
+                          src={getPhotoUrl(admin.profilePhoto)}
+                          alt={admin.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        admin.name.charAt(0)
+                      )}
                     </div>
                     <div>
                       <span className="font-bold text-gray-900 block">
@@ -516,8 +552,16 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
               {/* Admin Information */}
               <div className="bg-white border border-gray-200 rounded-xl p-8">
                 <div className="flex items-start gap-8 mb-6">
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-white text-4xl font-bold shadow-lg">
-                    {viewingAdmin.name.charAt(0)}
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-white text-4xl font-bold shadow-lg overflow-hidden">
+                    {viewingAdmin.profilePhoto ? (
+                      <img
+                        src={getPhotoUrl(viewingAdmin.profilePhoto)}
+                        alt={viewingAdmin.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      viewingAdmin.name.charAt(0)
+                    )}
                   </div>
                   <div className="flex-1">
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">
@@ -566,6 +610,20 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
                     </div>
                   </div>
 
+                  {viewingAdmin.nic && (
+                    <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                        NIC
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="w-4 h-4 text-purple-500" />
+                        <span className="text-gray-900 font-medium">
+                          {viewingAdmin.nic}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">
                       Role
@@ -609,18 +667,6 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
                   </div>
                 </div>
               </div>
-
-              {(["Super Admin", "Main Admin"] as AdminRole[]).includes(
-                currentUser.adminRole ?? "Customer Support",
-              ) && (
-                <Button
-                  onClick={() => handleOpenModal()}
-                  className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl h-11 px-6 font-bold shadow-lg shadow-purple-100 transition-all active:scale-95 flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Admin
-                </Button>
-              )}
             </div>
           </div>
         </div>
@@ -644,6 +690,30 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
 
             <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
               <div className="space-y-4">
+                {/* Profile Photo Upload */}
+                <div className="flex flex-col items-center gap-3">
+                  <div className="relative w-24 h-24 rounded-full overflow-hidden bg-purple-50 border-2 border-purple-100 flex items-center justify-center">
+                    {photoPreview ? (
+                      <img
+                        src={photoPreview.startsWith("blob:") ? photoPreview : getPhotoUrl(photoPreview)}
+                        alt="Profile preview"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <UserIcon className="w-10 h-10 text-purple-300" />
+                    )}
+                  </div>
+                  <label className="cursor-pointer inline-flex items-center gap-2 text-sm font-bold text-purple-600 hover:text-purple-700">
+                    <Camera className="w-4 h-4" />
+                    {photoPreview ? "Change Photo" : "Upload Photo"}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/webp"
+                      onChange={handlePhotoChange}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
                 {editingAdmin ? (
                   // Read-only display for editing mode
                   <div className="bg-purple-50 border border-purple-100 rounded-xl p-4 space-y-3">
@@ -749,6 +819,25 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
                     />
                   </div>
                 </div>
+
+                {!editingAdmin && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-bold text-gray-700">
+                      NIC
+                    </Label>
+                    <div className="relative">
+                      <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <Input
+                        value={formData.nic}
+                        onChange={(e) =>
+                          setFormData({ ...formData, nic: e.target.value })
+                        }
+                        placeholder="123456789V or 200012345678"
+                        className="pl-12 h-12 rounded-xl border-gray-200 focus:ring-purple-500"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {!editingAdmin && (
                   <div className="space-y-2">
