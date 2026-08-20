@@ -1,8 +1,10 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles, Home, Shirt, Sofa, Wind, Star, Clock, Shield, DollarSign } from 'lucide-react';
+import { Sparkles, Home, Shirt, Sofa, Wind, Star, Clock, Shield, DollarSign, MapPin, Mail, Phone } from 'lucide-react';
 import Header from './Header';
 import ChatbotFinder from './ChatbotFinder';
 import type { User } from '../types';
+import { settingsAPI } from '../lib/api';
 
 interface HomePageProps {
   user: User | null;
@@ -13,6 +15,17 @@ interface HomePageProps {
 }
 
 export default function HomePage({ user, onLogout, theme = 'light', onToggleTheme, onProfileClick }: HomePageProps) {
+  const [businessInfo, setBusinessInfo] = useState<{
+    name: string;
+    address: string;
+    emails: string[];
+    phones: string[];
+  } | null>(null);
+
+  useEffect(() => {
+    settingsAPI.getPublicBusinessInfo().then(setBusinessInfo).catch(console.error);
+  }, []);
+
   const services = [
     { id: 1, name: 'Home/Office Cleaning', icon: Home, description: 'Complete home and office cleaning services', color: 'bg-purple-500' },
     { id: 2, name: 'Laundry Service', icon: Shirt, description: 'Professional laundry and ironing', color: 'bg-purple-400' },
@@ -125,6 +138,76 @@ export default function HomePage({ user, onLogout, theme = 'light', onToggleThem
             </Link>
           </div>
         </section>
+
+        {/* Contact / Business Info */}
+        {businessInfo && (businessInfo.address || businessInfo.emails?.length > 0 || businessInfo.phones?.length > 0) && (
+          <section className="container mx-auto px-6 py-8">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg max-w-4xl mx-auto p-8 transition-colors">
+              <h2 className="text-2xl text-center mb-6 dark:text-white font-semibold">
+                Get In Touch
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {businessInfo.address && (
+                  <div className="text-center">
+                    <div className="bg-purple-100 dark:bg-purple-900/30 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <MapPin className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <h3 className="text-base mb-2 dark:text-white font-semibold">
+                      Address
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                      {businessInfo.address}
+                    </p>
+                  </div>
+                )}
+
+                {businessInfo.emails?.length > 0 && (
+                  <div className="text-center">
+                    <div className="bg-purple-100 dark:bg-purple-900/30 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <Mail className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <h3 className="text-base mb-2 dark:text-white font-semibold">
+                      Email
+                    </h3>
+                    <div className="space-y-1">
+                      {businessInfo.emails.map((email) => (
+                        <a
+                          key={email}
+                          href={`mailto:${email}`}
+                          className="block text-sm text-gray-600 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+                        >
+                          {email}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {businessInfo.phones?.length > 0 && (
+                  <div className="text-center">
+                    <div className="bg-purple-100 dark:bg-purple-900/30 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <Phone className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <h3 className="text-base mb-2 dark:text-white font-semibold">
+                      Phone
+                    </h3>
+                    <div className="space-y-1">
+                      {businessInfo.phones.map((phone) => (
+                        <a
+                          key={phone}
+                          href={`tel:${phone}`}
+                          className="block text-sm text-gray-600 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+                        >
+                          {phone}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Footer */}
         <footer className="bg-gray-900 dark:bg-black text-white py-4 transition-colors">

@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
 import {
-  Clock,
-  Calendar,
   Trash2,
   Plus,
   Building2,
@@ -22,9 +20,10 @@ import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { settingsAPI } from "../../lib/api";
 import { normalizePhoneNumber } from "../../lib/phone";
+import { isValidEmail, isValidPhone } from "../../lib/validation";
 import { toast } from "sonner";
 
-type SubTab = "general" | "business" | "pricing";
+type SubTab = "business" | "pricing";
 
 const DAYS = [
   "Monday",
@@ -45,39 +44,46 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const CATEGORY_ORDER = ["home", "shampoo", "laundry", "curtain"];
 
-export function SystemSettings() {
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>("general");
+const PRICING_TYPES = [
+  { value: "per-sqft", label: "Per Square Foot" },
+  { value: "per-seat", label: "Per Seat" },
+  { value: "fixed", label: "Fixed (by size / option)" },
+  { value: "per-unit", label: "Per Unit (with add-ons)" },
+  { value: "per-item", label: "Per Item (grouped)" },
+];
 
-  // General
-  const [businessHours, setBusinessHours] = useState({
-    start: "09:00",
-    end: "18:00",
-  });
-  const [operatingDays, setOperatingDays] = useState([
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-  ]);
-  const [cancellationPolicy, setCancellationPolicy] = useState("2");
-  const [durations, setDurations] = useState({
-    home: 120,
-    laundry: 60,
-    sofa: 90,
-  });
-  const [holidays, setHolidays] = useState<{ date: string; name: string }[]>(
-    [],
-  );
-  const [newHoliday, setNewHoliday] = useState({ date: "", name: "" });
+// Numeric fields inside a pricing structure — recognized by name so a
+// cloned template can have every price reset to 0 while keeping its
+// labels/structure (seats, sizes, types, item names, etc.) intact.
+const PRICE_FIELD_NAMES = new Set([
+  "price",
+  "pricePerSqft",
+  "pricePerCurtain",
+  "foldPrice",
+  "hangPrice",
+]);
+
+const zeroOutPrices = (node: any): any => {
+  if (Array.isArray(node)) return node.map(zeroOutPrices);
+  if (node && typeof node === "object") {
+    const clone: any = {};
+    for (const key of Object.keys(node)) {
+      clone[key] = PRICE_FIELD_NAMES.has(key) ? 0 : zeroOutPrices(node[key]);
+    }
+    return clone;
+  }
+  return node;
+};
+
+export function SystemSettings() {
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>("business");
 
   // Business
   const [business, setBusiness] = useState({
     name: "Cloud Laundry.lk",
     address: "",
-    email: "",
-    phone: "",
+    emails: [""] as string[],
+    phones: [""] as string[],
   });
 
   // Pricing — loaded from DB
@@ -107,19 +113,45 @@ export function SystemSettings() {
   const [savingId, setSavingId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
 
+  // New category / new service creation
+  const [customCategories, setCustomCategories] = useState<
+    { key: string; label: string }[]
+  >([]);
+  const [newCategoryInput, setNewCategoryInput] = useState("");
+  const [addServiceForCategory, setAddServiceForCategory] = useState<
+    string | null
+  >(null);
+  const [newServiceForm, setNewServiceForm] = useState({
+    name: "",
+    pricingType: "",
+    templateServiceId: "",
+  });
+  const [creatingService, setCreatingService] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
   // ── Load all settings from API ───────────────────────────────────────────
   useEffect(() => {
     settingsAPI
       .get()
       .then((data) => {
-        if (data.general) {
-          setBusinessHours(data.general.businessHours || businessHours);
-          setOperatingDays(data.general.operatingDays || operatingDays);
-          setCancellationPolicy(data.general.cancellationPolicy || "2");
-          setDurations(data.general.durations || durations);
-          setHolidays(data.general.holidays || []);
+        if (data.business) {
+          // Backward-compatible with older records that still have a
+          // single `email`/`phone` string instead of `emails`/`phones`
+          // arrays. Always keep at least one (possibly empty) input row.
+          const b = data.business;
+          const emails = Array.isArray(b.emails)
+            ? b.emails
+            : (b.email ? [b.email] : []);
+          const phones = Array.isArray(b.phones)
+            ? b.phones
+            : (b.phone ? [b.phone] : []);
+          setBusiness({
+            name: b.name || "Cloud Laundry.lk",
+            address: b.address || "",
+            emails: emails.length > 0 ? emails : [""],
+            phones: phones.length > 0 ? phones : [""],
+          });
         }
-        if (data.business) setBusiness(data.business);
         if (data.priceLists) setPriceLists(data.priceLists);
       })
       .catch((err) => console.error("Failed to load settings:", err))
@@ -131,33 +163,28 @@ export function SystemSettings() {
     setTimeout(() => setMessage(""), 3000);
   };
 
-  // ── General save ─────────────────────────────────────────────────────────
-  const handleSaveGeneral = async () => {
-    setSaving(true);
-    try {
-      await settingsAPI.saveGeneral({
-        businessHours,
-        operatingDays,
-        cancellationPolicy,
-        durations,
-        holidays,
-      });
-      toast.success("General settings saved");
-      showMsg("General settings saved successfully");
-    } catch (err: any) {
-      toast.error(err.error || "Failed to save");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   // ── Business save ────────────────────────────────────────────────────────
   const handleSaveBusiness = async () => {
+    const cleanEmails = business.emails.map((e) => e.trim()).filter(Boolean);
+    const cleanPhones = business.phones.map((p) => p.trim()).filter(Boolean);
+
+    const invalidEmail = cleanEmails.find((e) => !isValidEmail(e));
+    if (invalidEmail) {
+      toast.error(`"${invalidEmail}" is not a valid email address.`);
+      return;
+    }
+    const invalidPhone = cleanPhones.find((p) => !isValidPhone(p));
+    if (invalidPhone) {
+      toast.error(`"${invalidPhone}" must contain 10 digits.`);
+      return;
+    }
+
     setSaving(true);
     try {
       await settingsAPI.saveBusiness({
         ...business,
-        phone: normalizePhoneNumber(business.phone),
+        emails: cleanEmails,
+        phones: cleanPhones.map((p) => normalizePhoneNumber(p)),
       });
       toast.success("Business info saved");
       showMsg("Business info saved successfully");
@@ -218,6 +245,98 @@ export function SystemSettings() {
       return n;
     });
     setExpandedSvc(null);
+  };
+
+  // ── Category + service creation ──────────────────────────────────────────
+  const allCategoryKeys = Array.from(
+    new Set([
+      ...CATEGORY_ORDER,
+      ...priceLists.map((s) => s.category),
+      ...customCategories.map((c) => c.key),
+    ]),
+  );
+  const customCategoryLabels: Record<string, string> = Object.fromEntries(
+    customCategories.map((c) => [c.key, c.label]),
+  );
+  const getCategoryLabel = (key: string) =>
+    CATEGORY_LABELS[key] || customCategoryLabels[key] || key;
+
+  const handleAddCategory = () => {
+    const label = newCategoryInput.trim();
+    if (!label) return;
+    const key = label.toLowerCase().replace(/\s+/g, "-");
+    if (!allCategoryKeys.includes(key)) {
+      setCustomCategories((prev) => [...prev, { key, label }]);
+    }
+    setNewCategoryInput("");
+  };
+
+  const handleCreateService = async (category: string) => {
+    const { name, pricingType, templateServiceId } = newServiceForm;
+    if (!name.trim() || !pricingType || !templateServiceId) {
+      toast.error(
+        "Please fill in the service name, pricing type, and a template to copy the structure from.",
+      );
+      return;
+    }
+    const template = priceLists.find(
+      (s) => s.serviceId === Number(templateServiceId),
+    );
+    if (!template) {
+      toast.error("Selected template not found.");
+      return;
+    }
+    setCreatingService(true);
+    try {
+      const pricing = zeroOutPrices(
+        JSON.parse(JSON.stringify(template.pricing)),
+      );
+      const created = await settingsAPI.createService({
+        serviceName: name.trim(),
+        category,
+        pricingType,
+        pricing,
+      });
+      setPriceLists((prev) => [...prev, created]);
+      toast.success("Service created — fill in the prices below");
+      setAddServiceForCategory(null);
+      setNewServiceForm({ name: "", pricingType: "", templateServiceId: "" });
+      // Drop straight into the existing edit view so the admin can fill
+      // in real numbers right away, using the same editor already built
+      // for this pricing type.
+      startEditing(created);
+      setExpandedSvc(created.serviceId);
+    } catch (err: any) {
+      toast.error(err.error || "Failed to create service");
+    } finally {
+      setCreatingService(false);
+    }
+  };
+
+  const handleDeleteService = async (svc: any) => {
+    if (
+      !confirm(
+        `Delete "${svc.serviceName}"? This removes it permanently from the price list.`,
+      )
+    )
+      return;
+    setDeletingId(svc.serviceId);
+    try {
+      await settingsAPI.deleteService(svc.serviceId);
+      setPriceLists((prev) => prev.filter((s) => s.serviceId !== svc.serviceId));
+      // Clean up any local edit/expand state pointing at the now-deleted service.
+      setEditingPrices((prev) => {
+        const n = { ...prev };
+        delete n[svc.serviceId];
+        return n;
+      });
+      if (expandedSvc === svc.serviceId) setExpandedSvc(null);
+      toast.success("Service deleted");
+    } catch (err: any) {
+      toast.error(err.error || "Failed to delete service");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   // ── Pricing renderer based on pricingType ────────────────────────────────
@@ -539,7 +658,6 @@ export function SystemSettings() {
         {/* Sub-tabs */}
         <div className="flex gap-1 p-2 bg-gray-50 border-b border-gray-100">
           {[
-            { id: "general", name: "General", icon: Clock },
             { id: "business", name: "Business", icon: Building2 },
             { id: "pricing", name: "Pricing", icon: DollarSign },
           ].map((tab) => (
@@ -559,218 +677,26 @@ export function SystemSettings() {
         </div>
 
         <div className="p-8">
-          {/* ── GENERAL TAB ──────────────────────────────────────────────── */}
-          {activeSubTab === "general" && (
-            <div className="space-y-8 w-full">
-              {/* Business Hours */}
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-purple-600" /> Business Hours
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-sm font-semibold text-gray-700 mb-1 block">
-                      Opening Time
-                    </Label>
-                    <Input
-                      type="time"
-                      value={businessHours.start}
-                      onChange={(e) =>
-                        setBusinessHours({
-                          ...businessHours,
-                          start: e.target.value,
-                        })
-                      }
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-semibold text-gray-700 mb-1 block">
-                      Closing Time
-                    </Label>
-                    <Input
-                      type="time"
-                      value={businessHours.end}
-                      onChange={(e) =>
-                        setBusinessHours({
-                          ...businessHours,
-                          end: e.target.value,
-                        })
-                      }
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Operating Days */}
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-purple-600" /> Operating
-                  Days
-                </h3>
-                <div className="flex items-center gap-2">
-                  {DAYS.map((day) => (
-                    <button
-                      key={day}
-                      onClick={() =>
-                        setOperatingDays((prev) =>
-                          prev.includes(day)
-                            ? prev.filter((d) => d !== day)
-                            : [...prev, day],
-                        )
-                      }
-                      className={`flex-1 min-w-0 text-center px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
-                        operatingDays.includes(day)
-                          ? "bg-purple-600 text-white"
-                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                      }`}
-                    >
-                      {day.slice(0, 3)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Service Durations */}
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 mb-4">
-                  Default Service Durations
-                </h3>
-                <div className="grid grid-cols-3 gap-4">
-                  {[
-                    { key: "home", label: "Home Cleaning (min)" },
-                    { key: "laundry", label: "Laundry (min)" },
-                    { key: "sofa", label: "Sofa Cleaning (min)" },
-                  ].map(({ key, label }) => (
-                    <div key={key}>
-                      <Label className="text-sm font-semibold text-gray-700 mb-1 block">
-                        {label}
-                      </Label>
-                      <Input
-                        type="number"
-                        value={durations[key as keyof typeof durations]}
-                        onChange={(e) =>
-                          setDurations({
-                            ...durations,
-                            [key]: parseInt(e.target.value),
-                          })
-                        }
-                        className="h-12 rounded-xl"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Cancellation Policy */}
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 mb-4">
-                  Cancellation Policy
-                </h3>
-                <div className="flex items-center gap-3">
-                  <Input
-                    type="number"
-                    value={cancellationPolicy}
-                    onChange={(e) => setCancellationPolicy(e.target.value)}
-                    className="w-24 h-12 rounded-xl text-center"
-                  />
-                  <span className="text-gray-600 font-medium">
-                    hours before booking
-                  </span>
-                </div>
-              </div>
-
-              {/* Holidays */}
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 mb-4">
-                  Public Holidays
-                </h3>
-                <div className="space-y-2 mb-4">
-                  {holidays.map((h, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl"
-                    >
-                      <span className="w-36 shrink-0 text-sm font-sans text-purple-600 whitespace-nowrap">
-  {h.date}
-</span>
-<span className="flex-1 min-w-0 text-sm font-bold text-gray-700 truncate">
-  {h.name}
-</span>
-                      <button
-                        onClick={() =>
-                          setHolidays(holidays.filter((_, j) => j !== i))
-                        }
-                        className="shrink-0 p-1 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4 text-red-400" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-3">
-                  <Input
-                    type="date"
-                    value={newHoliday.date}
-                    onChange={(e) =>
-                      setNewHoliday({ ...newHoliday, date: e.target.value })
-                    }
-                    className="h-11 rounded-xl w-40"
-                  />
-                  <Input
-                    placeholder="Holiday name"
-                    value={newHoliday.name}
-                    onChange={(e) =>
-                      setNewHoliday({ ...newHoliday, name: e.target.value })
-                    }
-                    className="h-11 rounded-xl flex-1 min-w-0 px-4"
-                  />
-                  <Button
-                    onClick={() => {
-                      if (newHoliday.date && newHoliday.name) {
-                        setHolidays([...holidays, newHoliday]);
-                        setNewHoliday({ date: "", name: "" });
-                      }
-                    }}
-                    className="h-11 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-
-              <Button
-                onClick={handleSaveGeneral}
-                disabled={saving}
-                className="h-12 px-10 rounded-xl font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-200"
-              >
-                {saving ? "Saving..." : "Save General Settings"}
-              </Button>
-            </div>
-          )}
-
           {/* ── BUSINESS TAB ─────────────────────────────────────────────── */}
           {activeSubTab === "business" && (
             <div className="space-y-6 w-full">
               <h3 className="text-lg font-bold text-gray-900">
                 Business Information
               </h3>
+
               {[
                 {
-                  key: "name",
+                  key: "name" as const,
                   label: "Business Name",
                   icon: Building2,
                   type: "text",
                 },
                 {
-                  key: "address",
+                  key: "address" as const,
                   label: "Address",
                   icon: MapPin,
                   type: "text",
                 },
-                { key: "email", label: "Email", icon: Mail, type: "email" },
-                { key: "phone", label: "Phone", icon: Phone, type: "tel" },
               ].map(({ key, label, icon: Icon, type }) => (
                 <div key={key}>
                   <Label className="text-sm font-semibold text-gray-700 mb-1 block flex items-center gap-2">
@@ -778,7 +704,7 @@ export function SystemSettings() {
                   </Label>
                   <Input
                     type={type}
-                    value={business[key as keyof typeof business]}
+                    value={business[key]}
                     onChange={(e) =>
                       setBusiness({ ...business, [key]: e.target.value })
                     }
@@ -786,6 +712,105 @@ export function SystemSettings() {
                   />
                 </div>
               ))}
+
+              {/* Emails — add/remove any number of contact addresses */}
+              <div>
+                <Label className="text-sm font-semibold text-gray-700 mb-1 block flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-gray-400" /> Emails
+                </Label>
+                <div className="space-y-2">
+                  {business.emails.map((email, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <Input
+                        type="email"
+                        value={email}
+                        placeholder="e.g. support@cloudlaundry.lk"
+                        onChange={(e) => {
+                          const next = [...business.emails];
+                          next[idx] = e.target.value;
+                          setBusiness({ ...business, emails: next });
+                        }}
+                        className="h-12 rounded-xl flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setBusiness({
+                            ...business,
+                            emails:
+                              business.emails.length > 1
+                                ? business.emails.filter((_, i) => i !== idx)
+                                : [""],
+                          })
+                        }
+                        className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                        title="Remove email"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setBusiness({ ...business, emails: [...business.emails, ""] })
+                  }
+                  className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-purple-600 hover:text-purple-700"
+                >
+                  <Plus className="w-4 h-4" /> Add another email
+                </button>
+              </div>
+
+              {/* Phone numbers — add/remove any number of contact numbers */}
+              <div>
+                <Label className="text-sm font-semibold text-gray-700 mb-1 block flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-gray-400" /> Phone Numbers
+                </Label>
+                <div className="space-y-2">
+                  {business.phones.map((phone, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <Input
+                        type="tel"
+                        value={phone}
+                        placeholder="e.g. 077 123 4567"
+                        onChange={(e) => {
+                          const next = [...business.phones];
+                          next[idx] = e.target.value;
+                          setBusiness({ ...business, phones: next });
+                        }}
+                        className="h-12 rounded-xl flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setBusiness({
+                            ...business,
+                            phones:
+                              business.phones.length > 1
+                                ? business.phones.filter((_, i) => i !== idx)
+                                : [""],
+                          })
+                        }
+                        className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                        title="Remove phone number"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setBusiness({ ...business, phones: [...business.phones, ""] })
+                  }
+                  className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-purple-600 hover:text-purple-700"
+                >
+                  <Plus className="w-4 h-4" /> Add another phone number
+                </button>
+              </div>
+
               <Button
                 onClick={handleSaveBusiness}
                 disabled={saving}
@@ -799,7 +824,7 @@ export function SystemSettings() {
           {/* ── PRICING TAB ──────────────────────────────────────────────── */}
           {activeSubTab === "pricing" && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-4">
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">
                     Service Pricing
@@ -809,32 +834,178 @@ export function SystemSettings() {
                     update the customer-facing price list immediately.
                   </p>
                 </div>
+
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={newCategoryInput}
+                    onChange={(e) => setNewCategoryInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleAddCategory();
+                    }}
+                    placeholder="New category name"
+                    className="h-10 rounded-xl w-48"
+                  />
+                  <Button
+                    onClick={handleAddCategory}
+                    disabled={!newCategoryInput.trim()}
+                    className="h-10 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" /> Add Category
+                  </Button>
+                </div>
               </div>
 
-              {priceLists.length === 0 ? (
+              {priceLists.length === 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center">
                   <p className="text-amber-700 font-semibold">
                     No price lists found in database.
                   </p>
                   <p className="text-amber-600 text-sm mt-1">
-                    Run the price list seed script to populate pricing data.
+                    Run the price list seed script to populate pricing data,
+                    or add your first category and service above.
                   </p>
                 </div>
-              ) : (
-                CATEGORY_ORDER.map((category) => {
-                  const services = priceLists.filter(
-                    (s) => s.category === category,
-                  );
-                  if (services.length === 0) return null;
+              )}
 
-                  return (
-                    <div key={category}>
-                      <h4 className="text-base font-bold text-gray-800 mb-3 flex items-center gap-2">
+              {allCategoryKeys.map((category) => {
+                const services = priceLists.filter(
+                  (s) => s.category === category,
+                );
+                const isAddingService = addServiceForCategory === category;
+
+                return (
+                  <div key={category}>
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-base font-bold text-gray-800 flex items-center gap-2">
                         <span className="w-3 h-3 rounded-full bg-purple-400 inline-block" />
-                        {CATEGORY_LABELS[category]}
+                        {getCategoryLabel(category)}
                       </h4>
+                      {!isAddingService && (
+                        <button
+                          onClick={() => {
+                            setAddServiceForCategory(category);
+                            setNewServiceForm({
+                              name: "",
+                              pricingType: "",
+                              templateServiceId: "",
+                            });
+                          }}
+                          className="flex items-center gap-1.5 text-sm font-semibold text-purple-600 hover:text-purple-700"
+                        >
+                          <Plus className="w-4 h-4" /> Add Service
+                        </button>
+                      )}
+                    </div>
 
-                      <div className="space-y-3">
+                    {services.length === 0 && !isAddingService && (
+                      <p className="text-sm text-gray-400 mb-3">
+                        No services yet in this category.
+                      </p>
+                    )}
+
+                    {isAddingService && (
+                      <div className="bg-purple-50 border border-purple-100 rounded-2xl p-5 mb-4 space-y-3">
+                        <div>
+                          <Label className="text-sm font-semibold text-gray-700 mb-1 block">
+                            Service Name
+                          </Label>
+                          <Input
+                            value={newServiceForm.name}
+                            onChange={(e) =>
+                              setNewServiceForm({
+                                ...newServiceForm,
+                                name: e.target.value,
+                              })
+                            }
+                            placeholder="e.g. Mattress Deep Clean"
+                            className="h-11 rounded-xl bg-white"
+                          />
+                        </div>
+
+                        <div>
+                          <Label className="text-sm font-semibold text-gray-700 mb-1 block">
+                            Pricing Type
+                          </Label>
+                          <select
+                            value={newServiceForm.pricingType}
+                            onChange={(e) =>
+                              setNewServiceForm({
+                                ...newServiceForm,
+                                pricingType: e.target.value,
+                                templateServiceId: "",
+                              })
+                            }
+                            className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-white font-medium text-gray-700"
+                          >
+                            <option value="">Select a pricing type</option>
+                            {PRICING_TYPES.map((t) => (
+                              <option key={t.value} value={t.value}>
+                                {t.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {newServiceForm.pricingType && (
+                          <div>
+                            <Label className="text-sm font-semibold text-gray-700 mb-1 block">
+                              Copy Structure From
+                            </Label>
+                            <select
+                              value={newServiceForm.templateServiceId}
+                              onChange={(e) =>
+                                setNewServiceForm({
+                                  ...newServiceForm,
+                                  templateServiceId: e.target.value,
+                                })
+                              }
+                              className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-white font-medium text-gray-700"
+                            >
+                              <option value="">
+                                Select an existing service to copy the field
+                                structure from
+                              </option>
+                              {priceLists
+                                .filter(
+                                  (s) =>
+                                    s.pricingType ===
+                                    newServiceForm.pricingType,
+                                )
+                                .map((s) => (
+                                  <option key={s.serviceId} value={s.serviceId}>
+                                    {s.serviceName} ({getCategoryLabel(s.category)}
+                                    )
+                                  </option>
+                                ))}
+                            </select>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Prices will start at 0 — only the field
+                              structure (types, sizes, seats, etc.) is
+                              copied.
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-3 pt-2">
+                          <Button
+                            onClick={() => handleCreateService(category)}
+                            disabled={creatingService}
+                            className="h-10 px-6 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold"
+                          >
+                            {creatingService ? "Creating..." : "Create Service"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => setAddServiceForCategory(null)}
+                            className="h-10 px-6 rounded-xl border-gray-200 font-semibold"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-3">
                         {services.map((svc) => {
                           const isExpanded = expandedSvc === svc.serviceId;
                           const isEditing = !!editingPrices[svc.serviceId];
@@ -872,17 +1043,30 @@ export function SystemSettings() {
                                   </div>
                                 </div>
                                 {!isEditing && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      startEditing(svc);
-                                      setExpandedSvc(svc.serviceId);
-                                    }}
-                                    className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-xl transition-colors"
-                                  >
-                                    <Edit className="w-3.5 h-3.5" />
-                                    Edit Prices
-                                  </button>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        startEditing(svc);
+                                        setExpandedSvc(svc.serviceId);
+                                      }}
+                                      className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-xl transition-colors"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" />
+                                      Edit Prices
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteService(svc);
+                                      }}
+                                      disabled={deletingId === svc.serviceId}
+                                      className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                                      title="Delete service"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
                                 )}
                               </div>
 
@@ -926,8 +1110,7 @@ export function SystemSettings() {
                       </div>
                     </div>
                   );
-                })
-              )}
+                })}
 
               {/* Offers section */}
               <div className="mt-10">

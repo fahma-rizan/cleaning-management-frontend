@@ -39,7 +39,7 @@ describe('PaymentPage offline payment confirmation', () => {
       ok: true,
       json: async () => booking,
     });
-    global.fetch = mockFetch as any;
+    globalThis.fetch = mockFetch as any;
   });
 
   test.each(['cod', 'pay-after-completion'])('redirects %s to the booking success page after confirm', async (method) => {

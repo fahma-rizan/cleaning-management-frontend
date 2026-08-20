@@ -8,7 +8,6 @@ import {
   Calendar,
   Package,
   Star,
-  Ban,
   CheckCircle,
   XCircle,
   Eye,
@@ -37,14 +36,15 @@ interface Customer {
   totalBookings: number;
   totalSpent: number;
   loyaltyPoints: number;
-  customerStatus: "active" | "inactive" | "blocked";
+  customerStatus: "active" | "inactive";
   lastBooking?: string;
 }
 
 export function CustomerManagement() {
+  const DETAILS_PREVIEW_LIMIT = 5;
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<
-    "All" | "Active" | "Inactive" | "Blocked"
+    "All" | "Active" | "Inactive"
   >("All");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +52,12 @@ export function CustomerManagement() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
     null,
   );
+  const [customerDetails, setCustomerDetails] = useState<any>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState("");
+  const [showAllBookings, setShowAllBookings] = useState(false);
+  const [showAllPayments, setShowAllPayments] = useState(false);
+  const [showAllReviews, setShowAllReviews] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -91,8 +97,6 @@ export function CustomerManagement() {
         return "bg-green-100 text-green-700 hover:bg-green-100";
       case "inactive":
         return "bg-gray-100 text-gray-700 hover:bg-gray-100";
-      case "blocked":
-        return "bg-red-100 text-red-700 hover:bg-red-100";
       default:
         return "bg-gray-100 text-gray-700 hover:bg-gray-100";
     }
@@ -129,25 +133,31 @@ export function CustomerManagement() {
     setSelectedCustomer(customer);
     setIsDetailsModalOpen(true);
     setOpenDropdown(null);
-  };
-
-  const handleBlock = async (customer: Customer) => {
-    if (!confirm(`Are you sure you want to block ${customer.name}?`)) return;
-    try {
-      await customerAPI.updateStatus(customer._id, "blocked");
-      setCustomers((prev) =>
-        prev.map((c) =>
-          c._id === customer._id ? { ...c, customerStatus: "blocked" } : c,
-        ),
-      );
-      setSelectedCustomer((prev) =>
-        prev ? { ...prev, customerStatus: "blocked" } : null,
-      );
-      setOpenDropdown(null);
-      if (isDetailsModalOpen) setIsDetailsModalOpen(false);
-    } catch (err: any) {
-      alert(err.error || "Failed to block customer");
-    }
+    setCustomerDetails(null);
+    setDetailsError("");
+    setShowAllBookings(false);
+    setShowAllPayments(false);
+    setShowAllReviews(false);
+    setDetailsLoading(true);
+    customerAPI
+      .getDetails(customer._id)
+      .then((data) => {
+        setCustomerDetails(data);
+        setCustomers((prev) =>
+          prev.map((c) =>
+            c._id === customer._id
+              ? {
+                  ...c,
+                  totalBookings: data.totalBookings ?? c.totalBookings,
+                  totalSpent: data.totalSpent ?? c.totalSpent,
+                  loyaltyPoints: data.loyaltyPoints ?? c.loyaltyPoints,
+                }
+              : c,
+          ),
+        );
+      })
+      .catch((err) => setDetailsError(err.error || "Failed to load customer details"))
+      .finally(() => setDetailsLoading(false));
   };
 
   const handleReactivate = async (customer: Customer) => {
@@ -169,80 +179,8 @@ export function CustomerManagement() {
     }
   };
 
-  // Mock detailed data for selected customer
-  const getCustomerDetails = (customer: Customer | null) => {
-    if (!customer) return null;
-    return {
-      ...customer,
-      addresses: [
-        { type: "Home", address: "123 Galle Road, Colombo 03" },
-        { type: "Office", address: "456 Duplication Rd, Colombo 04" },
-      ],
-      bookingHistory: [
-        {
-          id: "BK127",
-          service: "Home Cleaning",
-          date: "Feb 10",
-          status: "completed",
-          amount: 2500,
-        },
-        {
-          id: "BK098",
-          service: "Laundry",
-          date: "Jan 25",
-          status: "completed",
-          amount: 1500,
-        },
-        {
-          id: "BK075",
-          service: "Home Cleaning",
-          date: "Jan 10",
-          status: "completed",
-          amount: 2500,
-        },
-        {
-          id: "BK052",
-          service: "Sofa Cleaning",
-          date: "Dec 20",
-          status: "cancelled",
-          amount: 0,
-        },
-      ],
-      paymentHistory: [
-        {
-          id: "INV-127",
-          date: "Feb 10",
-          method: "Online",
-          amount: 2500,
-          status: "paid",
-        },
-        {
-          id: "INV-098",
-          date: "Jan 25",
-          method: "COD",
-          amount: 1500,
-          status: "paid",
-        },
-        {
-          id: "INV-075",
-          date: "Jan 10",
-          method: "Online",
-          amount: 2500,
-          status: "paid",
-        },
-      ],
-      reviews: [
-        { text: "Excellent service!", date: "Feb 10", rating: 5 },
-        { text: "Very professional", date: "Jan 25", rating: 5 },
-      ],
-      averageRating: 4.8,
-      completedBookings: 7,
-      cancelledBookings: 1,
-      loyaltyTier: "Gold",
-    };
-  };
-
-  const customerDetails = getCustomerDetails(selectedCustomer);
+  // Customer details are now fetched from the backend in handleViewDetails
+  // (see customerAPI.getDetails) instead of this mock generator.
 
   if (loading)
     return (
@@ -270,7 +208,7 @@ export function CustomerManagement() {
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-6">
           <div className="w-14 h-14 rounded-xl bg-purple-50 flex items-center justify-center">
             <Users className="w-7 h-7 text-purple-600" />
@@ -306,18 +244,6 @@ export function CustomerManagement() {
             <div className="text-gray-500 font-medium">Inactive</div>
           </div>
         </div>
-
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-6">
-          <div className="w-14 h-14 rounded-xl bg-red-50 flex items-center justify-center">
-            <Ban className="w-7 h-7 text-red-600" />
-          </div>
-          <div>
-            <div className="text-3xl font-bold text-gray-900">
-              {customers.filter((c) => c.customerStatus === "blocked").length}
-            </div>
-            <div className="text-gray-500 font-medium">Blocked</div>
-          </div>
-        </div>
       </div>
 
       {/* Actions Row */}
@@ -333,7 +259,7 @@ export function CustomerManagement() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {(["All", "Active", "Inactive", "Blocked"] as const).map((status) => (
+          {(["All", "Active", "Inactive"] as const).map((status) => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
@@ -470,45 +396,14 @@ export function CustomerManagement() {
                             View Details
                           </button>
 
-                          {/* Active → Block only (deactivation is automatic) */}
-                          {customer.customerStatus === "active" && (
-                            <button
-                              onClick={() => handleBlock(customer)}
-                              className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors border-t border-gray-100"
-                            >
-                              <XCircle className="w-4 h-4 text-red-500" />
-                              Block
-                            </button>
-                          )}
-
-                          {/* Inactive → Reactivate + Block */}
+                          {/* Inactive → Reactivate */}
                           {customer.customerStatus === "inactive" && (
-                            <>
-                              <button
-                                onClick={() => handleReactivate(customer)}
-                                className="w-full px-4 py-2.5 text-left text-sm text-green-600 hover:bg-green-50 flex items-center gap-3 transition-colors border-t border-gray-100"
-                              >
-                                <CheckCircle className="w-4 h-4 text-green-500" />
-                                Reactivate
-                              </button>
-                              <button
-                                onClick={() => handleBlock(customer)}
-                                className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
-                              >
-                                <XCircle className="w-4 h-4 text-red-500" />
-                                Block
-                              </button>
-                            </>
-                          )}
-
-                          {/* Blocked → Unblock only */}
-                          {customer.customerStatus === "blocked" && (
                             <button
                               onClick={() => handleReactivate(customer)}
                               className="w-full px-4 py-2.5 text-left text-sm text-green-600 hover:bg-green-50 flex items-center gap-3 transition-colors border-t border-gray-100"
                             >
                               <CheckCircle className="w-4 h-4 text-green-500" />
-                              Unblock
+                              Reactivate
                             </button>
                           )}
                         </div>
@@ -542,7 +437,7 @@ export function CustomerManagement() {
       )}
 
       {/* Customer Details Modal */}
-      {isDetailsModalOpen && customerDetails && (
+      {isDetailsModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
@@ -558,6 +453,21 @@ export function CustomerManagement() {
               </button>
             </div>
 
+            {detailsLoading && (
+              <div className="flex items-center justify-center h-64">
+                <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+
+            {!detailsLoading && detailsError && (
+              <div className="p-6">
+                <div className="bg-red-50 text-red-600 p-4 rounded-xl font-medium">
+                  {detailsError}
+                </div>
+              </div>
+            )}
+
+            {!detailsLoading && !detailsError && customerDetails && (
             <div className="p-6 space-y-6">
               {/* Personal Info */}
               <div className="bg-purple-50 border border-purple-100 rounded-xl p-6">
@@ -601,7 +511,7 @@ export function CustomerManagement() {
                         Member Since:
                       </span>
                       <span className="ml-2 text-gray-900">
-                        {customerDetails.joinDate}
+                        {customerDetails.joinDate ? new Date(customerDetails.joinDate).toLocaleDateString() : "—"}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -659,26 +569,33 @@ export function CustomerManagement() {
                   Saved Addresses
                 </h3>
                 <div className="space-y-3">
-                  {customerDetails.addresses.map((addr, idx) => (
+                  {customerDetails.addresses.length === 0 && (
+                    <div className="text-sm text-gray-500">No addresses on file.</div>
+                  )}
+                  {customerDetails.addresses.map(
+                    (addr: { type?: string; address: string }, idx: number) => (
                     <div
                       key={idx}
                       className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
                     >
-                      {addr.type === "Home" ? (
-                        <Home className="w-5 h-5 text-purple-600 mt-0.5" />
-                      ) : (
+                      {addr.type && addr.type !== "Home" ? (
                         <Building2 className="w-5 h-5 text-purple-600 mt-0.5" />
+                      ) : (
+                        <Home className="w-5 h-5 text-purple-600 mt-0.5" />
                       )}
                       <div>
-                        <div className="font-bold text-gray-900">
-                          {addr.type}:
-                        </div>
+                        {addr.type && (
+                          <div className="font-bold text-gray-900">
+                            {addr.type}:
+                          </div>
+                        )}
                         <div className="text-sm text-gray-600">
                           {addr.address}
                         </div>
                       </div>
                     </div>
-                  ))}
+                    ),
+                  )}
                 </div>
               </div>
 
@@ -688,7 +605,19 @@ export function CustomerManagement() {
                   Booking History
                 </h3>
                 <div className="space-y-2">
-                  {customerDetails.bookingHistory.map((booking) => (
+                  {customerDetails.bookingHistory.length === 0 && (
+                    <div className="text-sm text-gray-500">No bookings yet.</div>
+                  )}
+                  {(showAllBookings
+                    ? customerDetails.bookingHistory
+                    : customerDetails.bookingHistory.slice(0, DETAILS_PREVIEW_LIMIT)
+                  ).map((booking: {
+                    id: string;
+                    service: string;
+                    date: string;
+                    status: string;
+                    amount: number;
+                  }) => (
                     <div
                       key={booking.id}
                       className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
@@ -705,14 +634,26 @@ export function CustomerManagement() {
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        {booking.status === "completed" ? (
+                        {booking.status === "completed" && (
                           <>
                             <CheckCircle className="w-4 h-4 text-green-600" />
                             <span className="font-bold text-gray-900">
                               LKR {booking.amount.toLocaleString()}
                             </span>
                           </>
-                        ) : (
+                        )}
+                        {booking.status === "confirmed" && (
+                          <>
+                            <CheckCircle className="w-4 h-4 text-blue-600" />
+                            <span className="text-blue-700 font-medium">
+                              Confirmed
+                            </span>
+                            <span className="font-bold text-gray-900">
+                              LKR {booking.amount.toLocaleString()}
+                            </span>
+                          </>
+                        )}
+                        {booking.status === "cancelled" && (
                           <>
                             <XCircle className="w-4 h-4 text-red-600" />
                             <span className="text-red-600 font-medium">
@@ -720,12 +661,22 @@ export function CustomerManagement() {
                             </span>
                           </>
                         )}
+                        {booking.status !== "completed" && booking.status !== "confirmed" && booking.status !== "cancelled" && (
+                          <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-semibold capitalize">
+                            {booking.status}
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))}
-                  <button className="w-full text-center py-2 text-purple-600 hover:text-purple-700 font-medium text-sm">
-                    View All Bookings
-                  </button>
+                  {!showAllBookings && customerDetails.bookingHistory.length > DETAILS_PREVIEW_LIMIT && (
+                    <button
+                      onClick={() => setShowAllBookings(true)}
+                      className="w-full text-center py-2 text-purple-600 hover:text-purple-700 font-medium text-sm"
+                    >
+                      View All Bookings
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -735,7 +686,18 @@ export function CustomerManagement() {
                   Payment History
                 </h3>
                 <div className="space-y-2">
-                  {customerDetails.paymentHistory.map((payment) => (
+                  {customerDetails.paymentHistory.length === 0 && (
+                    <div className="text-sm text-gray-500">No payments recorded.</div>
+                  )}
+                  {(showAllPayments
+                    ? customerDetails.paymentHistory
+                    : customerDetails.paymentHistory.slice(0, DETAILS_PREVIEW_LIMIT)
+                  ).map((payment: {
+                    id: string;
+                    date: string;
+                    method: string;
+                    amount: number;
+                  }) => (
                     <div
                       key={payment.id}
                       className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
@@ -759,9 +721,14 @@ export function CustomerManagement() {
                       </div>
                     </div>
                   ))}
-                  <button className="w-full text-center py-2 text-purple-600 hover:text-purple-700 font-medium text-sm">
-                    View All Payments
-                  </button>
+                  {!showAllPayments && customerDetails.paymentHistory.length > DETAILS_PREVIEW_LIMIT && (
+                    <button
+                      onClick={() => setShowAllPayments(true)}
+                      className="w-full text-center py-2 text-purple-600 hover:text-purple-700 font-medium text-sm"
+                    >
+                      View All Payments
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -770,23 +737,36 @@ export function CustomerManagement() {
                 <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wider mb-4">
                   Ratings & Reviews
                 </h3>
-                <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg font-bold text-gray-900">
-                      Average Rating: {customerDetails.averageRating}
-                    </span>
-                    <div className="flex">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star
-                          key={star}
-                          className="w-5 h-5 text-yellow-500 fill-yellow-500"
-                        />
-                      ))}
+                {customerDetails.averageRating !== null ? (
+                  <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold text-gray-900">
+                        Average Rating: {customerDetails.averageRating}
+                      </span>
+                      <div className="flex">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Star
+                            key={star}
+                            className={`w-5 h-5 ${star <= Math.round(customerDetails.averageRating) ? "text-yellow-500 fill-yellow-500" : "text-gray-300"}`}
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="mb-4 text-sm text-gray-500">
+                    No reviews yet.
+                  </div>
+                )}
                 <div className="space-y-4">
-                  {customerDetails.reviews.map((review, idx) => (
+                  {(showAllReviews
+                    ? customerDetails.reviews
+                    : customerDetails.reviews.slice(0, DETAILS_PREVIEW_LIMIT)
+                  ).map(
+                    (
+                      review: { text: string; rating: number; date?: string },
+                      idx: number,
+                    ) => (
                     <div key={idx} className="p-4 bg-gray-50 rounded-lg">
                       <p className="text-gray-900 font-medium mb-2">
                         "{review.text}"
@@ -801,66 +781,39 @@ export function CustomerManagement() {
                           ))}
                         </div>
                         <span className="text-sm text-gray-500">
-                          {review.date}
+                          {review.date ? new Date(review.date).toLocaleDateString() : ""}
                         </span>
                       </div>
                     </div>
-                  ))}
-                  <button className="w-full text-center py-2 text-purple-600 hover:text-purple-700 font-medium text-sm">
-                    View All Reviews
-                  </button>
+                    ),
+                  )}
+                  {!showAllReviews && customerDetails.reviews.length > DETAILS_PREVIEW_LIMIT && (
+                    <button
+                      onClick={() => setShowAllReviews(true)}
+                      className="w-full text-center py-2 text-purple-600 hover:text-purple-700 font-medium text-sm"
+                    >
+                      View All Reviews
+                    </button>
+                  )}
                 </div>
               </div>
 
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 pt-4 border-t border-gray-200">
-                {/* Active → Block only (deactivation is automatic) */}
-                {customerDetails?.customerStatus === "active" && (
-                  <Button
-                    variant="destructive"
-                    onClick={() => handleBlock(customerDetails!)}
-                    className="flex-1 min-w-[180px] py-3 rounded-xl font-bold justify-center"
-                  >
-                    <XCircle className="w-4 h-4" />
-                    Block
-                  </Button>
-                )}
-
-                {/* Inactive → Reactivate + Block */}
+                {/* Inactive → Reactivate */}
                 {customerDetails?.customerStatus === "inactive" && (
-                  <>
-                    <Button
-                      variant="outline"
-                      onClick={() => handleReactivate(customerDetails!)}
-                      className="flex-1 min-w-[180px] border-green-200 bg-green-50 text-green-700 hover:bg-green-100 py-3 rounded-xl font-bold justify-center"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      Reactivate
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={() => handleBlock(customerDetails!)}
-                      className="flex-1 min-w-[180px] py-3 rounded-xl font-bold justify-center"
-                    >
-                      <XCircle className="w-4 h-4" />
-                      Block
-                    </Button>
-                  </>
-                )}
-
-                {/* Blocked → Unblock only */}
-                {customerDetails?.customerStatus === "blocked" && (
                   <Button
                     variant="outline"
                     onClick={() => handleReactivate(customerDetails!)}
                     className="flex-1 min-w-[180px] border-green-200 bg-green-50 text-green-700 hover:bg-green-100 py-3 rounded-xl font-bold justify-center"
                   >
                     <CheckCircle className="w-4 h-4" />
-                    Unblock
+                    Reactivate
                   </Button>
                 )}
               </div>
             </div>
+            )}
           </div>
         </div>
       )}
