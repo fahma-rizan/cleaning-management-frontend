@@ -158,24 +158,37 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
   };
 
   const [estimatedPrice, setEstimatedPrice] = useState(0);
-  const [slotCounts, setSlotCounts] = useState<Record<string, number>>({});
+  // true/false = known available/unavailable from the backend; absent = not
+  // checked yet (treated as available so slots aren't blurred before the
+  // first fetch resolves).
+  const [slotAvailability, setSlotAvailability] = useState<Record<string, boolean>>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
+  // Staff-availability based slot check — not a fixed "max bookings per
+  // slot" count. Passes the service info this page already knows (from
+  // serviceId) so the backend checks availability against the actual
+  // specialization + team-size this booking needs.
   const fetchSlotCounts = async (date: string) => {
     if (!date) return;
     try {
-      const data = await fetchWithAuth(`/bookings/slot-check?date=${date}`);
-      if (data.success) setSlotCounts(data.slotCounts);
+      const serviceName     = serviceMapping[serviceId || '1'] || 'home cleaning';
+      const serviceType     = mainServiceTypeMapping[serviceId || '1'] || 'Home/Office Cleaning';
+      const serviceCategory = serviceCategoryMapping[serviceId || '1'] || 'General Cleaning';
+      const params = new URLSearchParams({ date, serviceName, serviceType, serviceCategory });
+      const data = await fetchWithAuth(`/bookings/slot-check?${params.toString()}`);
+      if (data.success) setSlotAvailability(data.slotAvailability);
     } catch {
       // silently ignore — slots won't show as disabled
     }
   };
 
+  // Keep in sync with TIME_SLOTS in backend/controllers/bookingController.js.
   const timeSlots = [
-    '9:00AM - 11:00AM',
-    '11:00AM - 1:00PM',
-    '2:00PM - 4:00PM',
-    '4:00PM - 6:00PM',
+    '8:00AM - 10:00AM',
+    '10:30AM - 12:30PM',
+    '1:00PM - 3:00PM',
+    '3:30PM - 5:30PM',
+    '6:00PM - 8:00PM',
   ];
 
   // Curtain cleaning service types
@@ -472,10 +485,12 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                       >
                         <option value="">Choose slot</option>
                         {timeSlots.map(slot => {
-                          const isFull = (slotCounts[slot] || 0) >= 3;
+                          // Staff-availability based, not a fixed booking count —
+                          // true (available) until the backend says otherwise.
+                          const isFull = slotAvailability[slot] === false;
                           return (
                             <option key={slot} value={slot} disabled={isFull}>
-                              {slot}{isFull ? ' — Full' : ''}
+                              {slot}{isFull ? ' — No staff available' : ''}
                             </option>
                           );
                         })}
@@ -588,10 +603,12 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                       >
                         <option value="">Choose slot</option>
                         {timeSlots.map(slot => {
-                          const isFull = (slotCounts[slot] || 0) >= 3;
+                          // Staff-availability based, not a fixed booking count —
+                          // true (available) until the backend says otherwise.
+                          const isFull = slotAvailability[slot] === false;
                           return (
                             <option key={slot} value={slot} disabled={isFull}>
-                              {slot}{isFull ? ' — Full' : ''}
+                              {slot}{isFull ? ' — No staff available' : ''}
                             </option>
                           );
                         })}
@@ -680,10 +697,12 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                       >
                         <option value="">Choose slot</option>
                         {timeSlots.map(slot => {
-                          const isFull = (slotCounts[slot] || 0) >= 3;
+                          // Staff-availability based, not a fixed booking count —
+                          // true (available) until the backend says otherwise.
+                          const isFull = slotAvailability[slot] === false;
                           return (
                             <option key={slot} value={slot} disabled={isFull}>
-                              {slot}{isFull ? ' — Full' : ''}
+                              {slot}{isFull ? ' — No staff available' : ''}
                             </option>
                           );
                         })}
@@ -772,10 +791,12 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                       >
                         <option value="">Choose slot</option>
                         {timeSlots.map(slot => {
-                          const isFull = (slotCounts[slot] || 0) >= 3;
+                          // Staff-availability based, not a fixed booking count —
+                          // true (available) until the backend says otherwise.
+                          const isFull = slotAvailability[slot] === false;
                           return (
                             <option key={slot} value={slot} disabled={isFull}>
-                              {slot}{isFull ? ' — Full' : ''}
+                              {slot}{isFull ? ' — No staff available' : ''}
                             </option>
                           );
                         })}
@@ -864,10 +885,12 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                       >
                         <option value="">Choose slot</option>
                         {timeSlots.map(slot => {
-                          const isFull = (slotCounts[slot] || 0) >= 3;
+                          // Staff-availability based, not a fixed booking count —
+                          // true (available) until the backend says otherwise.
+                          const isFull = slotAvailability[slot] === false;
                           return (
                             <option key={slot} value={slot} disabled={isFull}>
-                              {slot}{isFull ? ' — Full' : ''}
+                              {slot}{isFull ? ' — No staff available' : ''}
                             </option>
                           );
                         })}
@@ -1001,10 +1024,12 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                       >
                         <option value="">Choose slot</option>
                         {timeSlots.map(slot => {
-                          const isFull = (slotCounts[slot] || 0) >= 3;
+                          // Staff-availability based, not a fixed booking count —
+                          // true (available) until the backend says otherwise.
+                          const isFull = slotAvailability[slot] === false;
                           return (
                             <option key={slot} value={slot} disabled={isFull}>
-                              {slot}{isFull ? ' — Full' : ''}
+                              {slot}{isFull ? ' — No staff available' : ''}
                             </option>
                           );
                         })}
@@ -1146,10 +1171,12 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                       >
                         <option value="">Choose slot</option>
                         {timeSlots.map(slot => {
-                          const isFull = (slotCounts[slot] || 0) >= 3;
+                          // Staff-availability based, not a fixed booking count —
+                          // true (available) until the backend says otherwise.
+                          const isFull = slotAvailability[slot] === false;
                           return (
                             <option key={slot} value={slot} disabled={isFull}>
-                              {slot}{isFull ? ' — Full' : ''}
+                              {slot}{isFull ? ' — No staff available' : ''}
                             </option>
                           );
                         })}

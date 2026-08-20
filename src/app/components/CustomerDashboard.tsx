@@ -109,11 +109,13 @@ export default function CustomerDashboard({
     { id: "settings-link", name: "Settings", icon: Settings, link: "/security" },
   ];
 
+  // Keep in sync with TIME_SLOTS in backend/controllers/bookingController.js.
   const timeSlots = [
-    "9:00AM - 11:00AM",
-    "11:00AM - 1:00PM",
-    "2:00PM - 4:00PM",
-    "4:00PM - 6:00PM",
+    "8:00AM - 10:00AM",
+    "10:30AM - 12:30PM",
+    "1:00PM - 3:00PM",
+    "3:30PM - 5:30PM",
+    "6:00PM - 8:00PM",
   ];
 
   useEffect(() => {
