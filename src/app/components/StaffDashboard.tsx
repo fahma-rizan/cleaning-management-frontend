@@ -187,6 +187,21 @@ export default function StaffDashboard({
     useState<Booking | null>(null);
   const [declineReason, setDeclineReason] = useState("");
 
+  // Unavailability request modal state — becoming Unavailable now requires
+  // admin approval; it's no longer an immediate self-toggle.
+  const [showUnavailableModal, setShowUnavailableModal] = useState(false);
+  const [unavailableReason, setUnavailableReason] = useState("");
+  const [submittingUnavailable, setSubmittingUnavailable] = useState(false);
+  const [pendingAvailabilityRequest, setPendingAvailabilityRequest] =
+    useState<{ _id: string; reason: string; createdAt: string } | null>(null);
+
+  // Check for an already-pending request on load (survives page refresh)
+  useEffect(() => {
+    fetchWithAuth('/staff-requests/availability/mine')
+      .then((data) => { if (data?.success) setPendingAvailabilityRequest(data.request); })
+      .catch(() => {});
+  }, []);
+
   // Material usage form state
   const [showMaterialForm, setShowMaterialForm] = useState(false);
   const [selectedTaskForMaterial, setSelectedTaskForMaterial] =
@@ -336,7 +351,8 @@ export default function StaffDashboard({
         setDeclineReason("");
         await fetchBookings(false);
         alert(
-          `✅ Task declined and forwarded to admin for reassignment.\n\nAnother available staff member will be assigned automatically.`,
+          result.message ||
+          `✅ Decline request sent to admin for approval.\n\nThe task remains assigned to you until the admin approves it.`,
         );
       } else {
         alert("Failed to decline task: " + result.message);
@@ -347,20 +363,50 @@ export default function StaffDashboard({
     }
   };
 
-  // Toggle availability via backend
+  // Becoming Unavailable now requires admin approval — opens a reason modal
+  // instead of toggling immediately. Ending an already-approved leave early
+  // (going back to Available) is still immediate, no approval needed.
   const handleAvailabilityToggle = async () => {
+    if (isAvailable) {
+      setUnavailableReason("");
+      setShowUnavailableModal(true);
+      return;
+    }
     try {
-      const data = await fetchWithAuth('/staff/availability', { method: 'PATCH' });
+      const data = await fetchWithAuth('/staff-requests/availability/end', { method: 'PATCH' });
       if (data.success) {
-        setIsAvailable(data.isAvailable);
-        if (data.isAvailable) {
-          alert("✅ You are now AVAILABLE for service today. Admin has been notified.");
-        } else {
-          alert("⚠️ You are now UNAVAILABLE. Admin will be notified to reschedule affected bookings.");
-        }
+        setIsAvailable(true);
+        alert("✅ You are now AVAILABLE for service today.");
       }
     } catch (err) {
-      console.error('Toggle availability error:', err);
+      console.error('End unavailability error:', err);
+    }
+  };
+
+  const submitUnavailabilityRequest = async () => {
+    if (!unavailableReason.trim()) {
+      alert("⚠️ Please provide a reason for going unavailable.");
+      return;
+    }
+    setSubmittingUnavailable(true);
+    try {
+      const data = await fetchWithAuth('/staff-requests/availability', {
+        method: 'POST',
+        body: JSON.stringify({ reason: unavailableReason }),
+      });
+      if (data.success) {
+        setPendingAvailabilityRequest(data.request);
+        setShowUnavailableModal(false);
+        setUnavailableReason("");
+        alert(data.message || "Unavailability request submitted — waiting for admin approval.");
+      } else {
+        alert(data.message || "Failed to submit request.");
+      }
+    } catch (err) {
+      console.error('Request unavailability error:', err);
+      alert("Failed to submit request. Please try again.");
+    } finally {
+      setSubmittingUnavailable(false);
     }
   };
 
@@ -517,43 +563,58 @@ export default function StaffDashboard({
         {/* Availability Status Card */}
         <div
           className={`rounded-xl shadow-lg p-6 mb-8 border-2 ${
-            isAvailable
+            pendingAvailabilityRequest
+              ? "bg-amber-50 border-amber-500"
+              : isAvailable
               ? "bg-green-50 border-green-500"
               : "bg-red-50 border-red-500"
           }`}
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-4">
-              {isAvailable ? (
+              {pendingAvailabilityRequest ? (
+                <Clock className="w-12 h-12 text-amber-600" />
+              ) : isAvailable ? (
                 <UserCheck className="w-12 h-12 text-green-600" />
               ) : (
                 <UserX className="w-12 h-12 text-red-600" />
               )}
               <div>
                 <h3 className="text-2xl font-bold text-gray-900">
-                  {isAvailable
+                  {pendingAvailabilityRequest
+                    ? "⏳ Unavailability Request Pending"
+                    : isAvailable
                     ? "✅ Available for Service Today"
                     : "⚠️ Unavailable Today"}
                 </h3>
                 <p
-                  className={`mt-1 ${isAvailable ? "text-green-700" : "text-red-700"}`}
+                  className={`mt-1 ${
+                    pendingAvailabilityRequest ? "text-amber-700" : isAvailable ? "text-green-700" : "text-red-700"
+                  }`}
                 >
-                  {isAvailable
+                  {pendingAvailabilityRequest
+                    ? `Waiting for admin approval — reason: "${pendingAvailabilityRequest.reason}". You remain Available until approved.`
+                    : isAvailable
                     ? "You are marked as available for service assignments"
-                    : "You are marked as unavailable. Admin will reschedule your bookings."}
+                    : "You are marked as unavailable. Admin has approved your leave."}
                 </p>
               </div>
             </div>
             {/* mark unavailability button */}
             <button
               onClick={handleAvailabilityToggle}
-              className={`px-6 py-3 rounded-lg font-semibold transition-all transform hover:scale-105 ${
+              disabled={!!pendingAvailabilityRequest}
+              className={`px-6 py-3 rounded-lg font-semibold transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none ${
                 isAvailable
                   ? "bg-red-600 hover:bg-red-700 text-white"
                   : "bg-green-600 hover:bg-green-700 text-white"
               }`}
             >
-              {isAvailable ? "Mark Unavailable" : "Mark Available"}
+              {pendingAvailabilityRequest
+                ? "Request Pending..."
+                : isAvailable
+                ? "Mark Unavailable"
+                : "Mark Available"}
             </button>
           </div>
         </div>
@@ -1015,6 +1076,43 @@ export default function StaffDashboard({
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
                 Decline Task
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Request Unavailability Modal */}
+      {showUnavailableModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">
+              Request Unavailability
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              This sends a request to the admin — you'll stay marked Available
+              until they approve it. Please provide a reason.
+            </p>
+            <textarea
+              value={unavailableReason}
+              onChange={(e) => setUnavailableReason(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-lg mb-4"
+              placeholder="Reason for going unavailable..."
+              rows={4}
+            />
+            <div className="flex justify-end gap-4">
+              <button
+                onClick={() => setShowUnavailableModal(false)}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitUnavailabilityRequest}
+                disabled={submittingUnavailable}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {submittingUnavailable ? "Submitting..." : "Submit Request"}
               </button>
             </div>
           </div>

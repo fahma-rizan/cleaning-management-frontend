@@ -10,12 +10,16 @@ import logo from '../../assets/d0e24839a24076173960597a25c12b48f3330fdf.png';
 import type { User } from '../types';
 import { type AdminRole, ALL_ROLES, canAccessTab } from '../lib/permissions';
 import ProfileModal from './ProfileModal';
+import { fetchWithAuth } from '../utils/api';
 
 // ── Admin sub-components ─────────────────────────────────────────────────────
 import AdminOverview            from './admin/AdminOverview';
 import { StaffManagement }      from './admin/StaffManagement';
 import { StaffAvailabilityManagement } from './admin/StaffAvailabilityManagement';
 import { TaskReassignmentManagement }  from './admin/TaskReassignmentManagement';
+import { AvailabilityRequests }  from './admin/AvailabilityRequests';
+import { TaskDeclineRequests }   from './admin/TaskDeclineRequests';
+import { StaffTaskOverview }     from './admin/StaffTaskOverview';
 import { AdminManagement }      from './admin/AdminManagement';
 import { CustomerManagement }   from './admin/CustomerManagement';
 import { ReviewsManagement }    from './admin/ReviewsManagement';
@@ -43,6 +47,9 @@ const TAB_NAMES: Record<string, string> = {
   staff:                'Staff Management',
   'staff-availability': 'Staff Availability',
   'task-reassignment':  'Task Reassignment',
+  'availability-requests':  'Availability Requests',
+  'task-decline-requests':  'Task Decline Requests',
+  'staff-task-overview':    'Staff Task Overview',
   'admin-mgmt':         'Admin Management',
   customer:             'Customer Management',
   payments:             'Payments',
@@ -65,6 +72,9 @@ const NAV_ITEMS: NavItem[] = [
     subItems: [
       { id: 'staff-availability', name: 'Availability',  allowedRoles: ['Super Admin', 'Main Admin', 'Operations Manager'] },
       { id: 'task-reassignment',  name: 'Reassignments', allowedRoles: ['Super Admin', 'Main Admin', 'Operations Manager'] },
+      { id: 'availability-requests', name: 'Availability Requests', allowedRoles: ['Super Admin', 'Main Admin', 'Operations Manager'] },
+      { id: 'task-decline-requests', name: 'Task Decline Requests', allowedRoles: ['Super Admin', 'Main Admin', 'Operations Manager'] },
+      { id: 'staff-task-overview',   name: 'Staff Task Overview',   allowedRoles: ['Super Admin', 'Main Admin', 'Operations Manager'] },
     ],
   },
   { id: 'admin-mgmt', name: 'Admin Management',     icon: ShieldCheck,  allowedRoles: ['Super Admin', 'Main Admin'] },
@@ -91,6 +101,13 @@ const NAV_ITEMS: NavItem[] = [
 // Sub-item id → real route in the /billing/* sub-app. Add an entry here (and
 // a matching subItem + TAB_PERMISSIONS entry above) for each new billing
 // page you want reachable from this sidebar.
+// Sub-item id → key into the /staff-requests/pending-counts response, for
+// the small red notification badge shown next to a sidebar sub-item.
+const SUB_ITEM_BADGE_KEY: Record<string, 'availability' | 'decline'> = {
+  'availability-requests': 'availability',
+  'task-decline-requests': 'decline',
+};
+
 const BILLING_ROUTES: Record<string, string> = {
   'billing-financial-dashboard': '/billing/admin/financial-dashboard',
   'billing-analytics':           '/billing/admin/analytics',
@@ -103,6 +120,20 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   const [activeTab,    setActiveTab]    = useState('overview');
   const [showProfile,  setShowProfile]  = useState(false);
   const [sidebarOpen,  setSidebarOpen]  = useState(false);
+  const [pendingCounts, setPendingCounts] = useState({ availability: 0, decline: 0 });
+
+  // Sidebar notification badges — pending Availability/Task Decline requests.
+  // Poll every 30s so a badge appears without the admin needing to click in.
+  useEffect(() => {
+    const loadCounts = () => {
+      fetchWithAuth('/staff-requests/pending-counts')
+        .then(data => { if (data?.success) setPendingCounts({ availability: data.availability, decline: data.decline }); })
+        .catch(() => {});
+    };
+    loadCounts();
+    const interval = setInterval(loadCounts, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Reset to overview if role loses access
   useEffect(() => {
@@ -216,17 +247,27 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                   <div className="pl-12 space-y-1 mt-1">
                     {item.subItems
                       .filter(s => canAccessTab(s.id, user.adminRole))
-                      .map((sub) => (
-                        <button
-                          key={sub.id}
-                          onClick={() => handleTabChange(sub.id)}
-                          className={`w-full text-left py-2 text-xs font-bold uppercase tracking-widest transition-colors ${
-                            activeTab === sub.id ? 'text-purple-400' : 'text-gray-400 hover:text-purple-400'
-                          }`}
-                        >
-                          {sub.name}
-                        </button>
-                      ))}
+                      .map((sub) => {
+                        const badgeCount = SUB_ITEM_BADGE_KEY[sub.id]
+                          ? pendingCounts[SUB_ITEM_BADGE_KEY[sub.id]]
+                          : 0;
+                        return (
+                          <button
+                            key={sub.id}
+                            onClick={() => handleTabChange(sub.id)}
+                            className={`w-full flex items-center justify-between gap-2 text-left py-2 text-xs font-bold uppercase tracking-widest transition-colors ${
+                              activeTab === sub.id ? 'text-purple-400' : 'text-gray-400 hover:text-purple-400'
+                            }`}
+                          >
+                            <span>{sub.name}</span>
+                            {badgeCount > 0 && (
+                              <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] normal-case tracking-normal font-bold">
+                                {badgeCount}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                   </div>
                 )}
               </div>
@@ -339,6 +380,9 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
             {activeTab === 'staff'      && canAccessTab('staff',      user.adminRole) && <StaffManagement />}
             {activeTab === 'staff-availability' && canAccessTab('staff-availability', user.adminRole) && <StaffAvailabilityManagement />}
             {activeTab === 'task-reassignment'  && canAccessTab('task-reassignment',  user.adminRole) && <TaskReassignmentManagement />}
+            {activeTab === 'availability-requests' && canAccessTab('availability-requests', user.adminRole) && <AvailabilityRequests />}
+            {activeTab === 'task-decline-requests' && canAccessTab('task-decline-requests', user.adminRole) && <TaskDeclineRequests />}
+            {activeTab === 'staff-task-overview'   && canAccessTab('staff-task-overview',   user.adminRole) && <StaffTaskOverview />}
             {activeTab === 'admin-mgmt' && canAccessTab('admin-mgmt', user.adminRole) && <AdminManagement currentUser={user} />}
             {activeTab === 'customer'   && canAccessTab('customer',   user.adminRole) && <CustomerManagement />}
             {activeTab === 'reviews'    && canAccessTab('reviews',    user.adminRole) && <ReviewsManagement />}

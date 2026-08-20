@@ -1,4 +1,8 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+// FIX: was defaulting to 'http://localhost:3000/api' — that's this frontend's
+// own Vite dev server port, not the backend's. With no VITE_API_BASE_URL env
+// var set anywhere, every call through this service always 404'd against
+// Vite itself instead of reaching the real API on port 5000.
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 const getToken = (): string | null => localStorage.getItem('token');
 
