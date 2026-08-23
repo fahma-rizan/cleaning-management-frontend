@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, MessageSquare, AlertCircle, CheckCircle } from 'lucide-react';
+import { ArrowLeft, MessageSquare, AlertCircle, CheckCircle, BadgePercent } from 'lucide-react';
 import Header from './Header';
 import type { User } from '../types';
 
@@ -177,9 +177,32 @@ export default function ComplaintForm({ user, onLogout, theme, onToggleTheme }: 
                 >
                   <option value="Low">Low - Minor issue</option>
                   <option value="Medium">Medium - Moderate concern</option>
-                  <option value="High">High - Urgent issue</option>
+                  <option value="High">High - Urgent issue (price reduction)</option>
                 </select>
               </div>
+
+              {/* Price Reduction shortcut — a High-priority complaint is
+                  usually about the service falling short of what was paid
+                  for, so offer the price-reduction request flow directly
+                  instead of making the customer find it themselves. */}
+              {complaintData.priority === 'High' && (
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex gap-3 items-start">
+                    <BadgePercent className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+                    <div className="text-sm text-orange-800">
+                      <p className="font-semibold mb-1">Looking for a price reduction instead?</p>
+                      <p>You can request a partial refund for this booking directly.</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/billing/price-reduction')}
+                    className="shrink-0 bg-orange-600 text-white px-5 py-2.5 rounded-lg hover:bg-orange-700 transition-colors font-bold text-sm"
+                  >
+                    Price Reduction
+                  </button>
+                </div>
+              )}
 
               {/* Title */}
               <div>
