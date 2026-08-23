@@ -92,7 +92,6 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
     houseSize: 'medium',
     rooms: 2,
     bathrooms: 1,
-    frequency: 'once',
     // Home/Office cleaning — per-sqft pricing
     cleaningType: 'normal',
     squareFeet: 0,
@@ -168,8 +167,12 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
 
   // Staff-availability based slot check — not a fixed "max bookings per
   // slot" count. Passes the service info this page already knows (from
-  // serviceId) so the backend checks availability against the actual
-  // specialization + team-size this booking needs.
+  // serviceId), PLUS the size/quantity fields that determine staff headcount
+  // (getRequiredStaffCount on the backend), so a slot only shows as
+  // available here if enough staff actually exist for THIS booking's size —
+  // not just for the service in general. Without this, a large booking could
+  // show every slot as open, get rejected at submit time, and (until that was
+  // fixed too) silently fail to save while the UI still showed "confirmed".
   const fetchSlotCounts = async (date: string) => {
     if (!date) return;
     try {
@@ -177,12 +180,23 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
       const serviceType     = mainServiceTypeMapping[serviceId || '1'] || 'Home/Office Cleaning';
       const serviceCategory = serviceCategoryMapping[serviceId || '1'] || 'General Cleaning';
       const params = new URLSearchParams({ date, serviceName, serviceType, serviceCategory });
+      if (bookingData.squareFeet > 0)          params.set('squareFeet', String(bookingData.squareFeet));
+      if (bookingData.sofaSeatingCapacity > 0) params.set('sofaSeatingCapacity', String(bookingData.sofaSeatingCapacity));
+      if (bookingData.carpetSquareFeet > 0)    params.set('carpetSquareFeet', String(bookingData.carpetSquareFeet));
       const data = await fetchWithAuth(`/bookings/slot-check?${params.toString()}`);
       if (data.success) setSlotAvailability(data.slotAvailability);
     } catch {
       // silently ignore — slots won't show as disabled
     }
   };
+
+  // Re-check slot availability whenever the date is set OR a quantity field
+  // that changes the required staff headcount changes — e.g. someone
+  // increasing square footage after already picking a date needs the slot
+  // grid to reflect the bigger headcount immediately, not just at submit time.
+  useEffect(() => {
+    if (bookingData.date) fetchSlotCounts(bookingData.date);
+  }, [bookingData.date, bookingData.squareFeet, bookingData.sofaSeatingCapacity, bookingData.carpetSquareFeet]);
 
   // Keep in sync with TIME_SLOTS in backend/controllers/bookingController.js.
   const timeSlots = [
@@ -278,7 +292,7 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
 
   const handleInputChange = (field: string, value: any) => {
     setBookingData(prev => ({ ...prev, [field]: value }));
-    if (field === 'date' && value) fetchSlotCounts(value);
+    // Slot re-check is handled by the useEffect above (date + quantity fields)
   };
 
   const handleCurtainOptionToggle = (optionId: string) => {
@@ -443,23 +457,6 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                       </p>
                     )}
                   </div>
-
-                  {/* Frequency — only for regular cleaning services */}
-                  {['1', '6'].includes(serviceId || '') && (
-                    <div>
-                      <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Cleaning Frequency</label>
-                      <select
-                        value={bookingData.frequency}
-                        onChange={(e) => handleInputChange('frequency', e.target.value)}
-                        className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
-                      >
-                        <option value="once">One Time</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="biweekly">Bi-Weekly</option>
-                        <option value="monthly">Monthly</option>
-                      </select>
-                    </div>
-                  )}
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">

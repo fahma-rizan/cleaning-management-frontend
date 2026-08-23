@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
 import { fetchWithAuth } from '../utils/api';
 import { CheckCircle, FileText, ArrowLeft } from 'lucide-react';
 import Header from './Header';
@@ -89,6 +90,12 @@ export default function PaymentPage({ user, onLogout, theme, onToggleTheme }: Pa
     };
 
     // Save booking to MongoDB
+    // FIX: this used to log a failed/rejected save and fall straight through to
+    // the "Booking Confirmed!" screen anyway — e.g. when the slot no longer has
+    // enough qualified staff for this service's size (backend returns 400), the
+    // customer saw a fake success screen while nothing was ever saved, so the
+    // booking never appeared in Upcoming Bookings. Now a failed save stops here
+    // and tells the customer, instead of silently pretending it worked.
     try {
       const result = await fetchWithAuth('/bookings', {
         method: 'POST',
@@ -96,11 +103,16 @@ export default function PaymentPage({ user, onLogout, theme, onToggleTheme }: Pa
       });
       if (!result.success) {
         console.error('Booking API error:', result.message);
-      } else {
-        console.log('✅ Booking saved to database:', result.booking?.bookingId);
+        toast.error(result.message || 'Could not confirm your booking. Please choose a different date/time and try again.');
+        setProcessing(false);
+        return;
       }
+      console.log('✅ Booking saved to database:', result.booking?.bookingId);
     } catch (err) {
       console.error('Booking save failed:', err);
+      toast.error('Could not confirm your booking. Please check your connection and try again.');
+      setProcessing(false);
+      return;
     }
 
     const existingBookings = JSON.parse(localStorage.getItem('userBookings') || '[]');
@@ -340,6 +352,12 @@ export default function PaymentPage({ user, onLogout, theme, onToggleTheme }: Pa
     };
 
     // ── Save to MongoDB ──────────────────────────────────────────────────────
+    // FIX: this used to log a failed/rejected save and fall straight through to
+    // the "Booking Confirmed!" screen anyway — e.g. when the slot no longer has
+    // enough qualified staff for this service's size (backend returns 400), the
+    // customer saw a fake success screen while nothing was ever saved, so the
+    // booking never appeared in Upcoming Bookings. Now a failed save stops here
+    // and tells the customer, instead of silently pretending it worked.
     try {
       const result = await fetchWithAuth('/bookings', {
         method: 'POST',
@@ -347,11 +365,16 @@ export default function PaymentPage({ user, onLogout, theme, onToggleTheme }: Pa
       });
       if (!result.success) {
         console.error('Booking API error:', result.message);
-      } else {
-        console.log('✅ Booking saved to database:', result.booking?.bookingId);
+        toast.error(result.message || 'Could not confirm your booking. Please choose a different date/time and try again.');
+        setProcessing(false);
+        return;
       }
+      console.log('✅ Booking saved to database:', result.booking?.bookingId);
     } catch (err) {
       console.error('Booking save failed:', err);
+      toast.error('Could not confirm your booking. Please check your connection and try again.');
+      setProcessing(false);
+      return;
     }
 
     // ── Also keep in localStorage as local cache ─────────────────────────────

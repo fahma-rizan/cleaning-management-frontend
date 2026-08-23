@@ -58,8 +58,9 @@ const DEMO_ADMIN = {
   // "Not authorized, token failed." regardless of anything else being
   // correct. Replaced with a long-lived token signed for the real seeded
   // admin user (admin@cloudlaundry.lk) so `protect` accepts it.
+  // Re-signed again after JWT_SECRET was rotated — see backend/.env.
   token:
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhMmM0YTAzMzI3OTM2NGM5OWQ4ZDMyNyIsImlhdCI6MTc4NzAzNTM4NywiZXhwIjoxODE4NTcxMzg3fQ.5FeBB6lcWBujPX_PkzLNIHebAF6DJu0jHXqhV75Y08M",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhMmM0YTAzMzI3OTM2NGM5OWQ4ZDMyNyIsImlhdCI6MTc4NzMxMDE3OCwiZXhwIjoxODE4ODQ2MTc4fQ.NoZdVMRedM0_7QoTd3jgKXxJdTv4AWEaMAjtezeXai0",
 };
 
 function BillingContent() {

@@ -4,7 +4,6 @@ export interface StructuredAddress {
   line1: string;
   line2: string;
   city: string;
-  postalCode: string;
   notes: string;
 }
 
@@ -12,7 +11,6 @@ export const emptyAddress: StructuredAddress = {
   line1: '',
   line2: '',
   city: '',
-  postalCode: '',
   notes: '',
 };
 
@@ -23,7 +21,6 @@ export const emptyAddress: StructuredAddress = {
 export function formatAddress(a: StructuredAddress): string {
   const parts = [a.line1.trim(), a.line2.trim(), a.city.trim()].filter(Boolean);
   let text = parts.join(', ');
-  if (a.postalCode.trim()) text += ` ${a.postalCode.trim()}`;
   if (a.notes.trim()) text += ` (${a.notes.trim()})`;
   return text.trim();
 }
@@ -85,27 +82,17 @@ export default function AddressInput({ value, onChange, label = 'Address', error
           className={inputClass}
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <select
-            value={isOtherCity ? '__other__' : value.city}
-            onChange={(e) => update('city', e.target.value === '__other__' ? ' ' : e.target.value)}
-            className={inputClass}
-          >
-            <option value="">Select city / town *</option>
-            {CITY_OPTIONS.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-            <option value="__other__">Other</option>
-          </select>
-
-          <input
-            type="text"
-            value={value.postalCode}
-            onChange={(e) => update('postalCode', e.target.value)}
-            placeholder="Postal code (optional)"
-            className={inputClass}
-          />
-        </div>
+        <select
+          value={isOtherCity ? '__other__' : value.city}
+          onChange={(e) => update('city', e.target.value === '__other__' ? ' ' : e.target.value)}
+          className={inputClass}
+        >
+          <option value="">Select city / town *</option>
+          {CITY_OPTIONS.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+          <option value="__other__">Other</option>
+        </select>
 
         {isOtherCity && (
           <input
