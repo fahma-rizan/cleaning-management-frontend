@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Calendar, Clock, MapPin, DollarSign, Home, Users, Minus, Plus, ShieldCheck, CheckCircle2, Sofa, Shirt } from 'lucide-react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -9,7 +9,7 @@ import AIEstimator from './AIEstimator';
 import DryCleaningPriceList from './DryCleaningPriceList';
 import WashingPressingPriceList from './WashingPressingPriceList';
 import PressingPriceList from './PressingPriceList';
-import AddressInput, { emptyAddress, isAddressComplete, type StructuredAddress } from './AddressInput';
+import AddressInput, { emptyAddress, isAddressComplete, parseFlatAddress, type StructuredAddress } from './AddressInput';
 import type { User } from '../types';
 import type { FormEvent } from 'react';
 import { fetchWithAuth } from '../utils/api';
@@ -25,7 +25,8 @@ interface BookingProps {
 export default function Booking({ user, onLogout, theme, onToggleTheme, onProfileClick }: BookingProps) {
   const { serviceId } = useParams();
   const navigate = useNavigate();
-  
+  const location = useLocation();
+
   // Service mapping
   const serviceMapping: { [key: string]: string } = {
     '1': 'house deep cleaning',
@@ -121,6 +122,47 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
     promoApplied: false,
   });
   const [applyingPromo, setApplyingPromo] = useState(false);
+
+  // "Rebook" from a past booking (My Bookings > Past) — the dashboard links
+  // here with the original booking in router state. Prefill everything it
+  // saved except date/time, since the whole point is booking the same thing
+  // again for a new slot. addressDetails itself was never persisted (only
+  // the flattened `address` string is), so it's reconstructed on a best-effort
+  // basis via parseFlatAddress. Fields the backend never stores either (e.g.
+  // cleaningType — a pricing-tier choice that was only ever a UI-local field)
+  // just keep their normal per-service default.
+  useEffect(() => {
+    const rebookFrom = (location.state as any)?.rebookFrom;
+    if (!rebookFrom) return;
+    setBookingData(prev => ({
+      ...prev,
+      date: '',
+      time: '',
+      address: rebookFrom.address || '',
+      addressDetails: parseFlatAddress(rebookFrom.address || ''),
+      houseSize: rebookFrom.houseSize ?? prev.houseSize,
+      rooms: rebookFrom.rooms ?? prev.rooms,
+      bathrooms: rebookFrom.bathrooms ?? prev.bathrooms,
+      squareFeet: rebookFrom.squareFeet ?? prev.squareFeet,
+      specialInstructions: rebookFrom.specialInstructions ?? prev.specialInstructions,
+      packageType: rebookFrom.packageType ?? prev.packageType,
+      laundryWeight: rebookFrom.laundryWeight ?? prev.laundryWeight,
+      laundryServices: rebookFrom.laundryServices ?? prev.laundryServices,
+      laundryItemType: rebookFrom.laundryItemType ?? prev.laundryItemType,
+      laundrySelectedItems: rebookFrom.laundrySelectedItems ?? prev.laundrySelectedItems,
+      laundryPickupDelivery: rebookFrom.laundryPickupDelivery ?? prev.laundryPickupDelivery,
+      curtainServiceType: rebookFrom.curtainServiceType ?? prev.curtainServiceType,
+      curtainOptions: rebookFrom.curtainOptions ?? prev.curtainOptions,
+      curtainQuantity: rebookFrom.curtainQuantity ?? prev.curtainQuantity,
+      sofaUnits: rebookFrom.sofaUnits ?? prev.sofaUnits,
+      sofaSeatingCapacity: rebookFrom.sofaSeatingCapacity ?? prev.sofaSeatingCapacity,
+      mattressCount: rebookFrom.mattressCount ?? prev.mattressCount,
+      carpetCount: rebookFrom.carpetCount ?? prev.carpetCount,
+      carpetSquareFeet: rebookFrom.carpetSquareFeet ?? prev.carpetSquareFeet,
+      mattressSquareFeet: rebookFrom.mattressSquareFeet ?? prev.mattressSquareFeet,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isLaundryService = serviceId === '2';
   const isCurtainService = serviceId === '4';

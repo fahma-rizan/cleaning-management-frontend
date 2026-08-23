@@ -22,6 +22,7 @@ import {
   MessageSquare,
   User as UserIcon,
   Settings,
+  RotateCcw,
 } from "lucide-react";
 import LoyaltyManagement from "./LoyaltyManagement";
 import SummaryPage from "./loyalty/SummaryPage";
@@ -664,6 +665,14 @@ export default function CustomerDashboard({
                         </Link>
                         {booking.status === "completed" && (
                           <>
+                            <Link
+                              to={`/booking/${booking.serviceId || "1"}`}
+                              state={{ rebookFrom: booking }}
+                              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-bold text-sm transition-all"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                              Rebook
+                            </Link>
                             <Link
                               to={`/reviews/${booking.serviceId || "1"}`}
                               className="flex items-center gap-2 px-4 py-2 border border-purple-200 text-purple-600 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 font-bold text-sm transition-all"

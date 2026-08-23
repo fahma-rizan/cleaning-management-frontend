@@ -31,6 +31,31 @@ export function isAddressComplete(a: StructuredAddress): boolean {
   return a.line1.trim().length >= 5 && a.city.trim().length >= 2;
 }
 
+// Best-effort inverse of formatAddress — only the flattened string survives
+// on a saved booking (addressDetails itself isn't persisted), so "Rebook"
+// on a past booking has to reconstruct the structured fields from it. Not
+// perfectly reversible (line2 vs. city can blur if there's no notes/only one
+// comma), but it's editable text the customer can fix in a couple of
+// seconds, which beats retyping the whole address from scratch.
+export function parseFlatAddress(flat: string): StructuredAddress {
+  if (!flat || !flat.trim()) return { ...emptyAddress };
+
+  let rest = flat.trim();
+  let notes = '';
+  const notesMatch = rest.match(/^(.*)\s\(([^)]*)\)$/);
+  if (notesMatch) {
+    rest = notesMatch[1].trim();
+    notes = notesMatch[2].trim();
+  }
+
+  const parts = rest.split(',').map((p) => p.trim()).filter(Boolean);
+  const line1 = parts[0] || '';
+  const city = parts.length > 1 ? parts[parts.length - 1] : '';
+  const line2 = parts.length > 2 ? parts.slice(1, -1).join(', ') : '';
+
+  return { line1, line2, city, notes };
+}
+
 interface AddressInputProps {
   value: StructuredAddress;
   // Emits the structured value AND the pre-flattened string in one call,
