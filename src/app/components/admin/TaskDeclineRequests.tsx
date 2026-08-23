@@ -54,6 +54,9 @@ export function TaskDeclineRequests() {
       if (data.success) {
         toast.success('Decline approved — task reassignment attempted.');
         setRequests(prev => prev.map(x => x._id === r._id ? { ...x, status: 'approved' } : x));
+        // Refresh the sidebar badge + bell notification immediately instead
+        // of waiting for their next 30s poll.
+        window.dispatchEvent(new Event('staff-requests-updated'));
       } else {
         toast.error(data.message || 'Failed to approve request.');
       }
@@ -71,6 +74,7 @@ export function TaskDeclineRequests() {
       if (data.success) {
         toast.success(`Request rejected — task stays with ${r.staffName}.`);
         setRequests(prev => prev.map(x => x._id === r._id ? { ...x, status: 'rejected' } : x));
+        window.dispatchEvent(new Event('staff-requests-updated'));
       } else {
         toast.error(data.message || 'Failed to reject request.');
       }

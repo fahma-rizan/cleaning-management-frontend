@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, ShieldCheck, CreditCard,
   PackageOpen, Star, AlertCircle, MapPin,
   FileText, Settings, LogOut, Search, Bell, ArrowLeft,
-  Menu, X, Receipt, Mail,
+  Menu, X, Receipt, Mail, UserX, ClipboardX,
 } from 'lucide-react';
 import logo from '../../assets/d0e24839a24076173960597a25c12b48f3330fdf.png';
 import type { User } from '../types';
@@ -121,9 +121,14 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   const [showProfile,  setShowProfile]  = useState(false);
   const [sidebarOpen,  setSidebarOpen]  = useState(false);
   const [pendingCounts, setPendingCounts] = useState({ availability: 0, decline: 0 });
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notificationsRef = useRef<HTMLDivElement>(null);
 
-  // Sidebar notification badges — pending Availability/Task Decline requests.
-  // Poll every 30s so a badge appears without the admin needing to click in.
+  // Sidebar notification badges + bell dropdown — pending Availability/Task
+  // Decline requests. Poll every 30s as a fallback, but also refresh
+  // immediately whenever a request is approved/rejected (AvailabilityRequests
+  // / TaskDeclineRequests dispatch 'staff-requests-updated' after acting on
+  // one) so the badge and bell clear right away instead of up to 30s later.
   useEffect(() => {
     const loadCounts = () => {
       fetchWithAuth('/staff-requests/pending-counts')
@@ -132,7 +137,22 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     };
     loadCounts();
     const interval = setInterval(loadCounts, 30000);
-    return () => clearInterval(interval);
+    window.addEventListener('staff-requests-updated', loadCounts);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('staff-requests-updated', loadCounts);
+    };
+  }, []);
+
+  // Close the notification dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   // Reset to overview if role loses access
@@ -150,6 +170,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   }, []);
 
   const visibleItems = NAV_ITEMS.filter(item => canAccessTab(item.id, user.adminRole));
+  const totalPendingCount = pendingCounts.availability + pendingCounts.decline;
 
   const handleTabChange = (id: string) => {
     if (id === 'inventory') {
@@ -361,10 +382,69 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
               />
             </div>
 
-            <button className="p-2.5 bg-gray-50 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-xl transition-all relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
-            </button>
+            <div className="relative" ref={notificationsRef}>
+              <button
+                onClick={() => setShowNotifications(v => !v)}
+                className="p-2.5 bg-gray-50 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-xl transition-all relative"
+              >
+                <Bell className="w-5 h-5" />
+                {totalPendingCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 min-w-[16px] h-[16px] px-1 flex items-center justify-center bg-red-500 text-white text-[9px] font-bold rounded-full border-2 border-white">
+                    {totalPendingCount > 9 ? '9+' : totalPendingCount}
+                  </span>
+                )}
+              </button>
+
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <h3 className="text-sm font-black text-slate-900">Notifications</h3>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {totalPendingCount === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm text-gray-400">
+                        You're all caught up.
+                      </div>
+                    ) : (
+                      <>
+                        {pendingCounts.availability > 0 && canAccessTab('availability-requests', user.adminRole) && (
+                          <button
+                            onClick={() => { handleTabChange('availability-requests'); setShowNotifications(false); }}
+                            className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-purple-50 transition-colors border-b border-gray-50"
+                          >
+                            <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+                              <UserX className="w-4 h-4 text-amber-600" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-slate-900">
+                                {pendingCounts.availability} pending availability request{pendingCounts.availability > 1 ? 's' : ''}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-0.5">Staff waiting to be marked Unavailable</p>
+                            </div>
+                          </button>
+                        )}
+                        {pendingCounts.decline > 0 && canAccessTab('task-decline-requests', user.adminRole) && (
+                          <button
+                            onClick={() => { handleTabChange('task-decline-requests'); setShowNotifications(false); }}
+                            className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-purple-50 transition-colors"
+                          >
+                            <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+                              <ClipboardX className="w-4 h-4 text-red-600" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-slate-900">
+                                {pendingCounts.decline} pending task decline request{pendingCounts.decline > 1 ? 's' : ''}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-0.5">Staff waiting to decline an assigned task</p>
+                            </div>
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center shadow-sm">
               <ShieldCheck className="w-5 h-5 text-purple-600" />
