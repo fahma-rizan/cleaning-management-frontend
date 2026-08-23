@@ -1,6 +1,14 @@
 import React from 'react';
-import { Calendar, Clock, Package, MapPin, Edit, Trash2 } from 'lucide-react';
+import { Calendar, Clock, Package, MapPin, Users, Edit, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+
+// Staff count scales with the service's size/quantity (backend
+// getRequiredStaffCount) rather than being a fixed team size, so this reads
+// however many ended up assigned instead of assuming 1 or 3.
+const getStaffCount = (booking: any): number => {
+  if (booking.assignedTeam && booking.assignedTeam.length > 0) return booking.assignedTeam.length;
+  return booking.assignedStaffId ? 1 : 0;
+};
 
 interface UpcomingBookingsListProps {
   bookings: any[];
@@ -50,6 +58,19 @@ export default function UpcomingBookingsList({ bookings, onReschedule, onCancel 
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider">Time</p>
                 <p className="text-sm font-bold text-gray-900 dark:text-white">{booking.time}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 md:col-start-2">
+              <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                <Users className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider">Staff Count</p>
+                <p className="text-sm font-bold text-gray-900 dark:text-white">
+                  {getStaffCount(booking) > 0
+                    ? `${getStaffCount(booking)} Staff Member${getStaffCount(booking) > 1 ? 's' : ''}`
+                    : 'To be assigned'}
+                </p>
               </div>
             </div>
             {booking.address && (
