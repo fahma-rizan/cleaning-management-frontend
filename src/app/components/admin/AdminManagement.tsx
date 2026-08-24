@@ -8,12 +8,10 @@ import {
   X,
   Trash2,
   Edit2,
-  Lock,
   Mail,
   User as UserIcon,
   CheckCircle2,
   Eye,
-  EyeOff,
   Ban,
   Phone,
   MapPin,
@@ -74,7 +72,6 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [viewingAdmin, setViewingAdmin] = useState<AdminUser | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [showPassword, setShowPassword] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -83,7 +80,6 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
     nic: "",
     phone: "",
     address: "",
-    password: "",
     role: "Main Admin" as AdminRole,
     status: "Active" as "Active" | "Inactive",
   });
@@ -128,14 +124,12 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
     );
     if (admin) {
       setEditingAdmin(admin);
-      setShowPassword(false);
       setFormData({
         name: admin.name,
         email: admin.email,
         nic: admin.nic || "",
         phone: admin.phone,
         address: admin.address,
-        password: "",
         role: admin.adminRole,
         status: admin.adminStatus,
       });
@@ -143,14 +137,12 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
       setPhotoPreview(admin.profilePhoto || "");
     } else {
       setEditingAdmin(null);
-      setShowPassword(false);
       setFormData({
         name: "",
         email: "",
         nic: "",
         phone: "",
         address: "",
-        password: "",
         role: assignable[0] ?? "Operations Manager",
         status: "Active",
       });
@@ -187,7 +179,7 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
       return;
     }
     if (!isValidPhone(formData.phone)) {
-      toast.error("Contact number must contain 10 digits.");
+      toast.error("Enter a valid Sri Lankan phone number (e.g. 0771234567).");
       return;
     }
     if (!editingAdmin && !isValidNIC(formData.nic)) {
@@ -198,12 +190,8 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
       toast.error("Address must not be empty.");
       return;
     }
-    if (
-      !formData.name.trim() ||
-      !formData.email.trim() ||
-      (!editingAdmin && !formData.password.trim())
-    ) {
-      toast.error("Please fill in Name, Email, and Password.");
+    if (!formData.name.trim() || !formData.email.trim()) {
+      toast.error("Please fill in Name and Email.");
       return;
     }
     try {
@@ -221,17 +209,22 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
         setAdmins((prev) =>
           prev.map((a) => (a._id === editingAdmin._id ? updated : a)),
         );
+        toast.success("Admin updated successfully.");
       } else {
         const newAdmin = await adminAPI.create({
           name: formData.name,
           email: formData.email,
-          password: formData.password,
           nic: formData.nic,
           phone: normalizedPhone,
           address: formData.address,
           role: formData.role,
         }, photoFile);
         setAdmins((prev) => [...prev, newAdmin]);
+        toast.success(
+          newAdmin.credentialsEmailed
+            ? "Admin account created — login credentials emailed to them."
+            : "Admin account created, but the credentials email failed to send. Check the email configuration.",
+        );
       }
       setIsModalOpen(false);
     } catch (err: any) {
@@ -840,34 +833,9 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
                 )}
 
                 {!editingAdmin && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-bold text-gray-700">
-                      Password
-                    </Label>
-                    <div className="relative">
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <Input
-                        value={formData.password}
-                        onChange={(e) =>
-                          setFormData({ ...formData, password: e.target.value })
-                        }
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        className="pl-12 pr-12 h-12 rounded-xl border-gray-200 focus:ring-purple-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((prev) => !prev)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                        aria-label={showPassword ? "Hide password" : "Show password"}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="w-5 h-5" />
-                        ) : (
-                          <Eye className="w-5 h-5" />
-                        )}
-                      </button>
-                    </div>
+                  <div className="rounded-xl border border-purple-100 bg-purple-50 px-4 py-3 text-sm text-purple-800">
+                    A temporary password will be generated automatically and emailed
+                    to this address. They'll set their own password on first login.
                   </div>
                 )}
 

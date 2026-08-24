@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { BrandHeader, AuthCard, AuthInput, AuthButton, AlertBanner, StaffFooter } from './AuthShared';
+import { getPasswordChecks, isValidPassword, PASSWORD_RULE } from '../../lib/validation';
 
 export default function RefinedResetPassword() {
   const navigate = useNavigate();
@@ -23,8 +24,8 @@ export default function RefinedResetPassword() {
 
     if (!formData.password) {
       errors.password = 'Password is required';
-    } else if (formData.password.length < 8) {
-      errors.password = 'Password must be at least 8 characters';
+    } else if (!isValidPassword(formData.password)) {
+      errors.password = PASSWORD_RULE;
     }
 
     if (!formData.confirmPassword) {
@@ -122,18 +123,22 @@ export default function RefinedResetPassword() {
           <div className="bg-[#F3F4F6] rounded-lg p-4 border border-[#E5E7EB]">
             <p className="text-xs text-[#6B7280] font-medium mb-2">Password must contain:</p>
             <ul className="space-y-1 text-xs text-[#6B7280]">
-              <li className="flex items-center gap-2">
-                <span className={`w-1 h-1 rounded-full ${formData.password.length >= 8 ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                At least 8 characters
-              </li>
-              <li className="flex items-center gap-2">
-                <span className={`w-1 h-1 rounded-full ${/[A-Z]/.test(formData.password) ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                One uppercase letter
-              </li>
-              <li className="flex items-center gap-2">
-                <span className={`w-1 h-1 rounded-full ${/[0-9]/.test(formData.password) ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                One number
-              </li>
+              {(() => {
+                const checks = getPasswordChecks(formData.password);
+                const rows: [boolean, string][] = [
+                  [checks.length, 'At least 8 characters'],
+                  [checks.uppercase, 'One uppercase letter'],
+                  [checks.lowercase, 'One lowercase letter'],
+                  [checks.number, 'One number'],
+                  [checks.special, 'One special character'],
+                ];
+                return rows.map(([met, label]) => (
+                  <li key={label} className="flex items-center gap-2">
+                    <span className={`w-1 h-1 rounded-full ${met ? 'bg-green-500' : 'bg-gray-300'}`}></span>
+                    {label}
+                  </li>
+                ));
+              })()}
             </ul>
           </div>
 

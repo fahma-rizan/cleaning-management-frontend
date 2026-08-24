@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, Lock, Eye, EyeOff } from 'lucide-react';
 import { BrandHeader, AuthCard, AuthInput, AuthButton, AlertBanner, StaffFooter } from './AuthShared';
+import { isValidEmail, isValidPhone, isValidPassword, PASSWORD_RULE } from '../../lib/validation';
 
 // Google Icon SVG Component
 const GoogleIcon = () => (
@@ -42,14 +43,18 @@ export default function RefinedRegister() {
     }
     if (!formData.email) {
       errors.email = "This field is required";
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+    } else if (!isValidEmail(formData.email)) {
       errors.email = "Please enter a valid email address";
     }
-    if (!formData.phone) errors.phone = "This field is required";
+    if (!formData.phone) {
+      errors.phone = "This field is required";
+    } else if (!isValidPhone(formData.phone)) {
+      errors.phone = "Enter a valid Sri Lankan phone number (e.g. 0771234567)";
+    }
     if (!formData.password) {
       errors.password = "This field is required";
-    } else if (formData.password.length < 8) {
-      errors.password = "Password must be at least 8 characters";
+    } else if (!isValidPassword(formData.password)) {
+      errors.password = PASSWORD_RULE;
     }
     if (formData.password !== formData.confirmPassword) errors.confirmPassword = "Passwords do not match";
 
@@ -133,7 +138,7 @@ export default function RefinedRegister() {
 
             <AuthInput
               label="Phone Number"
-              placeholder="+94 71 234 5678"
+              placeholder="0771234567"
               leftIcon={<Phone size={18} />}
               name="phone"
               value={formData.phone}
@@ -153,18 +158,23 @@ export default function RefinedRegister() {
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <AuthInput
-              label="Password"
-              type={showPassword ? "text" : "password"}
-              placeholder="Min 8 characters"
-              leftIcon={<Lock size={18} />}
-              rightIcon={showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              onClickRightIcon={() => setShowPassword(!showPassword)}
-              name="password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              error={fieldErrors.password}
-            />
+            <div>
+              <AuthInput
+                label="Password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Min 8 characters"
+                leftIcon={<Lock size={18} />}
+                rightIcon={showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                onClickRightIcon={() => setShowPassword(!showPassword)}
+                name="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                error={fieldErrors.password}
+              />
+              {!fieldErrors.password && (
+                <p className="text-xs text-[#9CA3AF] mt-1 ml-0.5">{PASSWORD_RULE}</p>
+              )}
+            </div>
 
             <AuthInput
               label="Confirm Password"

@@ -180,7 +180,10 @@ export default function App() {
             <Route
               path="staff-first-login"
               element={
-                user && user.role === "staff" ? (
+                // Shared first-login "set your own password" flow — reused by
+                // both staff and admin accounts that were created with an
+                // auto-generated temporary password.
+                user && (user.role === "staff" || user.role === "admin") ? (
                   <StaffFirstLogin />
                 ) : (
                   <Navigate to="/login" replace />
@@ -358,7 +361,7 @@ export default function App() {
             <Route
               path="admin"
               element={
-                user && user.role === "admin" ? (
+                user && user.role === "admin" && !user.requiresPasswordChange ? (
                   <AdminDashboard
                     user={user}
                     onLogout={handleLogout}
@@ -368,6 +371,8 @@ export default function App() {
                     }
                     onProfileClick={() => setShowProfileModal(true)}
                   />
+                ) : user && user.role === "admin" && user.requiresPasswordChange ? (
+                  <Navigate to="/staff-first-login" replace />
                 ) : (
                   <Navigate to="/login" replace />
                 )

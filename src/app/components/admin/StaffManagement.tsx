@@ -94,7 +94,6 @@ export function StaffManagement() {
     email: "",
     phone: "",
     nic: "",
-    password: "",
     address: "",
     specializations: [] as string[],
     status: "Active" as "Active" | "Inactive",
@@ -138,8 +137,7 @@ export function StaffManagement() {
       !formData.fullName ||
       !formData.email ||
       !formData.phone ||
-      !formData.nic ||
-      (isCreating && !formData.password)
+      !formData.nic
     ) {
       toast.error("Please fill all compulsory fields and upload a photo");
       return;
@@ -153,7 +151,7 @@ export function StaffManagement() {
       return;
     }
     if (!isValidPhone(formData.phone)) {
-      toast.error("Phone number must contain 10 digits.");
+      toast.error("Enter a valid Sri Lankan phone number (e.g. 0771234567).");
       return;
     }
     if (!isValidNIC(formData.nic)) {
@@ -172,7 +170,6 @@ export function StaffManagement() {
       fd.append("email", formData.email);
       fd.append("phone", formData.phone);
       fd.append("nic", formData.nic);
-      if (isCreating) fd.append("password", formData.password);
       fd.append("address", formData.address);
       fd.append("specializations", JSON.stringify(formData.specializations));
       fd.append("status", formData.status);
@@ -185,15 +182,23 @@ export function StaffManagement() {
             s._id === editingStaff._id ? normalizeStaffMember(updated) : s,
           ),
         );
+        toast.success("Staff member updated successfully", {
+          icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
+          className: "bg-white border-green-100",
+        });
       } else {
         const newStaff = await staffAPI.create(fd);
         setStaffMembers((prev) => [normalizeStaffMember(newStaff), ...prev]);
+        toast.success(
+          newStaff.credentialsEmailed
+            ? "Staff account created — login credentials emailed to them."
+            : "Staff account created, but the credentials email failed to send. Check the email configuration.",
+          {
+            icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
+            className: "bg-white border-green-100",
+          },
+        );
       }
-
-      toast.success("Save staff successfully", {
-        icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
-        className: "bg-white border-green-100",
-      });
 
       // Reset form and "redirect" (stay on add interface as requested)
       setFormData({
@@ -201,7 +206,6 @@ export function StaffManagement() {
         email: "",
         phone: "",
         nic: "",
-        password: "",
         address: "",
         specializations: [],
         status: "Active",
@@ -364,28 +368,11 @@ export function StaffManagement() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-semibold text-gray-700">
-                Password *
-              </label>
-              <Input
-                required
-                type="password"
-                name="password"
-                autoComplete="new-password"
-                placeholder="Enter password"
-                className="h-12 rounded-xl"
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700">
                 Phone Number *
               </label>
               <Input
                 required
-                placeholder="Enter phone number"
+                placeholder="e.g. 0771234567"
                 className="h-12 rounded-xl"
                 value={formData.phone}
                 onChange={(e) =>

@@ -32,7 +32,6 @@ export const adminAPI = {
     data: {
       name: string;
       email: string;
-      password: string;
       nic?: string;
       phone?: string;
       address?: string;

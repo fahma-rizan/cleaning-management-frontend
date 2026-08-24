@@ -63,15 +63,14 @@ export default function RefinedLogin({
         localStorage.setItem("token", data.token);
         if (onLogin) onLogin(data.user);
 
-        // Navigate based on role
+        // Navigate based on role. Both staff and admin accounts can be
+        // created by an admin with an auto-generated temp password
+        // (requiresPasswordChange) — route either one through the same
+        // first-login flow before letting them into their dashboard.
         if (data.user.role === "admin") {
-          navigate("/admin");
+          navigate(data.user.requiresPasswordChange ? "/staff-first-login" : "/admin");
         } else if (data.user.role === "staff") {
-          if (data.user.requiresPasswordChange) {
-            navigate("/staff-first-login");
-          } else {
-            navigate("/staff");
-          }
+          navigate(data.user.requiresPasswordChange ? "/staff-first-login" : "/staff");
         } else {
           navigate("/dashboard");
         }

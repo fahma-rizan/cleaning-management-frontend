@@ -16,10 +16,12 @@ export default function StaffFirstLogin() {
   const [fieldErrors, setFieldErrors]       = useState<Record<string, string>>({});
   const [readyToNavigate, setReadyToNavigate] = useState(false);
 
-  // Navigate only AFTER setUser has committed (avoids race with route guard)
+  // Navigate only AFTER setUser has committed (avoids race with route guard).
+  // Reused for both staff and admin first-login — the target dashboard
+  // depends on which one just logged in.
   useEffect(() => {
     if (readyToNavigate && user && !user.requiresPasswordChange) {
-      navigate('/staff', { replace: true });
+      navigate(user.role === 'admin' ? '/admin' : '/staff', { replace: true });
     }
   }, [user?.requiresPasswordChange, readyToNavigate]);
 
@@ -71,10 +73,8 @@ export default function StaffFirstLogin() {
     }
     if (!formData.newPass) {
       errors.newPass = 'New password is required';
-    } else if (formData.newPass.length < 8) {
-      errors.newPass = 'Password must be at least 8 characters';
-    } else if (passwordStrength.strength < 3) {
-      errors.newPass = 'Password is too weak. Please choose a stronger password';
+    } else if (passwordStrength.strength < 5) {
+      errors.newPass = 'Password must be at least 8 characters with uppercase, lowercase, number and special character.';
     }
     if (!formData.confirm) {
       errors.confirm = 'Please confirm your new password';
@@ -126,7 +126,7 @@ export default function StaffFirstLogin() {
 
   return (
     <div className="min-h-screen bg-[#F5F3FF] flex flex-col items-center justify-center p-6">
-      <BrandHeader subtitle="Staff portal — first time setup" />
+      <BrandHeader subtitle={user?.role === 'admin' ? 'Admin portal — first time setup' : 'Staff portal — first time setup'} />
 
       <AuthCard className="relative">
         <div className="flex flex-col items-center mt-8 mb-8">
@@ -144,7 +144,7 @@ export default function StaffFirstLogin() {
           <div className="flex-1">
             <p className="text-sm font-semibold text-[#92400E] mb-1">Action Required</p>
             <p className="text-xs text-[#92400E]">
-              You are logging in for the first time. Please change your temporary password (<strong>staff123</strong>) to continue.
+              You are logging in for the first time. Please change the temporary password we emailed you to continue.
             </p>
           </div>
         </div>
@@ -155,7 +155,7 @@ export default function StaffFirstLogin() {
           <AuthInput
             label="Temporary Password"
             type={showTempPass ? 'text' : 'password'}
-            placeholder="Enter: staff123"
+            placeholder="Enter the temporary password from your email"
             leftIcon={<Lock size={18} />}
             rightIcon={showTempPass ? <EyeOff size={18} /> : <Eye size={18} />}
             onClickRightIcon={() => setShowTempPass(!showTempPass)}
@@ -254,7 +254,7 @@ export default function StaffFirstLogin() {
 
         <div className="mt-6 p-3 bg-blue-50 border border-blue-100 rounded-lg">
           <p className="text-xs text-blue-800">
-            <strong>Note:</strong> After setting your new password, you'll be taken directly to your staff dashboard.
+            <strong>Note:</strong> After setting your new password, you'll be taken directly to your {user?.role === 'admin' ? 'admin' : 'staff'} dashboard.
           </p>
         </div>
       </AuthCard>
