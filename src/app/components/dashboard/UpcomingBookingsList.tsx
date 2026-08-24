@@ -86,6 +86,23 @@ export default function UpcomingBookingsList({ bookings, onReschedule, onCancel 
             )}
           </div>
 
+          {/* Laundry only — pickup is shown above via Date/Time; delivery is
+              a separate, independently-scheduled slot (see the booking
+              flow's Simple Laundry Booking Logic). */}
+          {booking.deliveryDate && booking.deliveryTime && (
+            <div className="flex items-center gap-3 mb-6 p-4 bg-purple-50 dark:bg-purple-900/10 rounded-xl border border-purple-100 dark:border-purple-900/30">
+              <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg shrink-0">
+                <Calendar className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div>
+                <p className="text-xs text-purple-500 dark:text-purple-400 font-semibold uppercase tracking-wider">Delivery</p>
+                <p className="text-sm font-bold text-gray-900 dark:text-white">
+                  {booking.deliveryDate} · {booking.deliveryTime}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Price and Actions */}
           <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
             <div>
