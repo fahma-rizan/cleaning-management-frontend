@@ -85,6 +85,21 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
   const toLocalDateStr = (date: Date) =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
+  // Mirrors backend/utils/dateUtils.js's addWorkingDays exactly — used here
+  // just to SHOW the customer the delivery date before they confirm; the
+  // backend always recomputes this itself as the source of truth.
+  const addWorkingDays = (dateStr: string, days: number): string => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    let added = 0;
+    while (added < days) {
+      date.setDate(date.getDate() + 1);
+      const dow = date.getDay();
+      if (dow !== 0 && dow !== 6) added++;
+    }
+    return toLocalDateStr(date);
+  };
+
   const [bookingData, setBookingData] = useState({
     date: '',
     time: '',
@@ -104,6 +119,7 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
     laundryItemType: 'normal',
     laundrySelectedItems: [] as any[], // For storing selected garments from price lists
     laundryPickupDelivery: false, // Pickup and delivery option
+    deliveryTime: '', // Laundry delivery time slot — delivery DATE is auto-calculated (2 working days after pickup), never typed
     // Curtain cleaning specific fields
     curtainServiceType: 'dry-clean-press', // dry-clean-press, laundry-press, premium
     curtainOptions: [] as string[], // removal, installation, pickup-delivery
@@ -165,6 +181,8 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
   }, []);
 
   const isLaundryService = serviceId === '2';
+  // Auto-calculated, never typed — 2 working days after the chosen pickup date.
+  const deliveryDate = bookingData.date ? addWorkingDays(bookingData.date, 2) : '';
   const isCurtainService = serviceId === '4';
   const isSofaCleaning = serviceId === '3';
   const isMattressCleaning = serviceId === '13';
@@ -205,6 +223,9 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
   // checked yet (treated as available so slots aren't blurred before the
   // first fetch resolves).
   const [slotAvailability, setSlotAvailability] = useState<Record<string, boolean>>({});
+  // Laundry only — same shape, but for the auto-calculated delivery date,
+  // checked completely independently of the pickup slot.
+  const [deliverySlotAvailability, setDeliverySlotAvailability] = useState<Record<string, boolean>>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // Staff-availability based slot check — not a fixed "max bookings per
@@ -215,7 +236,9 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
   // not just for the service in general. Without this, a large booking could
   // show every slot as open, get rejected at submit time, and (until that was
   // fixed too) silently fail to save while the UI still showed "confirmed".
-  const fetchSlotCounts = async (date: string) => {
+  // `setter` lets this same logic drive either the pickup grid or (for
+  // laundry) the independently-checked delivery grid.
+  const fetchSlotCounts = async (date: string, setter: (v: Record<string, boolean>) => void = setSlotAvailability) => {
     if (!date) return;
     try {
       const serviceName     = serviceMapping[serviceId || '1'] || 'home cleaning';
@@ -226,7 +249,7 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
       if (bookingData.sofaSeatingCapacity > 0) params.set('sofaSeatingCapacity', String(bookingData.sofaSeatingCapacity));
       if (bookingData.carpetSquareFeet > 0)    params.set('carpetSquareFeet', String(bookingData.carpetSquareFeet));
       const data = await fetchWithAuth(`/bookings/slot-check?${params.toString()}`);
-      if (data.success) setSlotAvailability(data.slotAvailability);
+      if (data.success) setter(data.slotAvailability);
     } catch {
       // silently ignore — slots won't show as disabled
     }
@@ -239,6 +262,13 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
   useEffect(() => {
     if (bookingData.date) fetchSlotCounts(bookingData.date);
   }, [bookingData.date, bookingData.squareFeet, bookingData.sofaSeatingCapacity, bookingData.carpetSquareFeet]);
+
+  // Delivery date is fully derived from the pickup date (2 working days
+  // later) — re-check its slot availability whenever the pickup date (and
+  // therefore the delivery date) changes.
+  useEffect(() => {
+    if (isLaundryService && deliveryDate) fetchSlotCounts(deliveryDate, setDeliverySlotAvailability);
+  }, [isLaundryService, deliveryDate]);
 
   // Keep in sync with TIME_SLOTS in backend/controllers/bookingController.js.
   const timeSlots = [
@@ -354,6 +384,8 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
       errors.address = 'Please enter a complete address (house/street and city).';
     if (isLaundryService && bookingData.laundryServices.length === 0)
       errors.laundryServices = 'Please select at least one laundry service.';
+    if (isLaundryService && !bookingData.deliveryTime)
+      errors.deliveryTime = 'Please select a delivery time slot.';
     if ((isDryCleaningService || isWashingPressingService || isPressingOnlyService) && estimatedPrice === 0)
       errors.items = 'Please select at least one item from the price list.';
     if (isHomeCleaningService && bookingData.squareFeet <= 0)
@@ -665,6 +697,69 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                     error={formErrors.address}
                   />
                 </div>
+
+                {/* Delivery date is auto-calculated (2 working days after
+                    pickup) — the customer only picks the delivery TIME slot,
+                    checked and staffed completely independently of pickup. */}
+                {bookingData.date && (
+                  <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+                    <h2 className="text-2xl font-bold mb-2 dark:text-white flex items-center gap-2">
+                      <Calendar className="w-6 h-6 text-purple-600" />
+                      Delivery Schedule
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                      Your laundry will be delivered back 2 working days after pickup.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Delivery Date</label>
+                        <div className="w-full px-5 py-4 bg-gray-100 dark:bg-gray-700 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold">
+                          {new Date(deliveryDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Delivery Time</label>
+                        <select
+                          value={bookingData.deliveryTime}
+                          onChange={(e) => handleInputChange('deliveryTime', e.target.value)}
+                          className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
+                        >
+                          <option value="">Choose slot</option>
+                          {timeSlots.map(slot => {
+                            const isFull = deliverySlotAvailability[slot] === false;
+                            return (
+                              <option key={slot} value={slot} disabled={isFull}>
+                                {slot}{isFull ? ' — No staff available' : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        {formErrors.deliveryTime && (
+                          <p className="mt-2 text-red-500 text-sm font-medium">{formErrors.deliveryTime}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Summary — customer sees both legs before confirming */}
+                    {bookingData.time && bookingData.deliveryTime && (
+                      <div className="mt-6 p-5 bg-purple-50 dark:bg-purple-900/10 rounded-2xl flex flex-col sm:flex-row items-center justify-center gap-3 text-center">
+                        <div>
+                          <p className="text-xs font-black uppercase text-purple-400 tracking-widest mb-1">Pickup</p>
+                          <p className="font-bold text-gray-900 dark:text-white">
+                            {new Date(bookingData.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · {bookingData.time}
+                          </p>
+                        </div>
+                        <span className="text-purple-400 font-bold">→</span>
+                        <div>
+                          <p className="text-xs font-black uppercase text-purple-400 tracking-widest mb-1">Delivery</p>
+                          <p className="font-bold text-gray-900 dark:text-white">
+                            {new Date(deliveryDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · {bookingData.deliveryTime}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

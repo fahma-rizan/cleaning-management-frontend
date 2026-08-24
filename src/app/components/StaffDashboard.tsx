@@ -54,6 +54,13 @@ interface Booking {
   cashReceived: boolean;
   isTeam: boolean;
   teamMembers: TeamMember[];
+  // Laundry pickup + delivery — present only on laundry bookings.
+  laundryStatus?: "booking-confirmed" | "picked-up" | "in-progress" | "delivered" | "completed";
+  deliveryDate?: string;
+  deliveryTime?: string;
+  deliveryStaffName?: string;
+  isPickupStaff?: boolean;
+  isDeliveryStaff?: boolean;
 }
 
 export default function StaffDashboard({
@@ -439,6 +446,37 @@ export default function StaffDashboard({
     }
   };
 
+  // Advances a laundry booking one step through Booking Confirmed → Picked
+  // Up → In Progress → Delivered → Completed. Either the pickup or delivery
+  // staff member can advance any stage (see backend updateLaundryStatus).
+  const LAUNDRY_STAGE_ORDER = ["booking-confirmed", "picked-up", "in-progress", "delivered", "completed"] as const;
+  const advanceLaundryStage = async (booking: Booking) => {
+    const currentIdx = LAUNDRY_STAGE_ORDER.indexOf(booking.laundryStatus || "booking-confirmed");
+    const nextStage = LAUNDRY_STAGE_ORDER[currentIdx + 1];
+    if (!nextStage) return;
+    try {
+      const result = await fetchWithAuth(`/bookings/${booking._id}/laundry-status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ stage: nextStage }),
+      });
+      if (result.success) {
+        setBookings(bookings.map((b) =>
+          b._id === booking._id
+            ? { ...b, laundryStatus: nextStage, status: result.booking.status }
+            : b,
+        ));
+        if (nextStage === "completed") {
+          alert("✅ Laundry delivered and completed! Customer has been notified.");
+        }
+      } else {
+        alert(result.message || "Failed to update laundry status.");
+      }
+    } catch (err) {
+      console.error('advanceLaundryStage error:', err);
+      alert("Failed to update laundry status. Please try again.");
+    }
+  };
+
   // Mark cash collected for COD tasks
   const markCashReceived = async (id: string) => {
     try {
@@ -761,19 +799,28 @@ export default function StaffDashboard({
                             booking.status,
                           )}`}
                         >
-                          {booking.status.replace(/-/g, " ").toUpperCase()}
+                          {(booking.laundryStatus || booking.status).replace(/-/g, " ").toUpperCase()}
                         </span>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                         <div className="flex items-center gap-2 text-sm text-gray-600">
                           <Calendar className="w-4 h-4" />
-                          {booking.date} at {booking.time}
+                          {booking.laundryStatus ? 'Pickup: ' : ''}{booking.date} at {booking.time}
+                          {booking.isPickupStaff && booking.laundryStatus && <span className="text-purple-600 font-semibold"> (You)</span>}
                         </div>
                         <div className="flex items-center gap-2 text-sm text-gray-600">
                           <MapPin className="w-4 h-4" />
                           {booking.address}
                         </div>
+                        {booking.laundryStatus && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600 md:col-span-2">
+                            <Calendar className="w-4 h-4" />
+                            Delivery: {booking.deliveryDate} at {booking.deliveryTime}
+                            {' — '}{booking.deliveryStaffName || 'unassigned'}
+                            {booking.isDeliveryStaff && <span className="text-purple-600 font-semibold"> (You)</span>}
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex justify-between items-center pt-3 border-t border-gray-100">
@@ -781,45 +828,71 @@ export default function StaffDashboard({
                           LKR {booking.amount.toLocaleString()}
                         </span>
                         <div className="flex gap-2 flex-wrap">
-                          {/* Task Status Actions */}
-                          {(booking.status === "pending" ||
-                            booking.status === "confirmed") && (
-                            <>
-                              
-                              {/*assigned task buttons */}
+                          {/* Laundry pickup + delivery — separate stage flow
+                              instead of the generic Start/Complete below.
+                              Either the pickup or delivery staff member can
+                              advance any stage (matches the backend, which
+                              doesn't hard-split who can touch what). */}
+                          {booking.laundryStatus ? (
+                            booking.laundryStatus === "completed" ? (
+                              <span className="px-4 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium">
+                                ✓ Delivered & Completed
+                              </span>
+                            ) : (
                               <button
-                                onClick={() =>
-                                  updateBookingStatus(booking._id, "in-progress")
-                                }
+                                onClick={() => advanceLaundryStage(booking)}
                                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
                               >
-                                Start Task
+                                {{
+                                  "booking-confirmed": "Mark Picked Up",
+                                  "picked-up": "Start Processing",
+                                  "in-progress": "Mark Delivered",
+                                  "delivered": "Mark Completed",
+                                }[booking.laundryStatus]}
                               </button>
-                              <button
-                                onClick={() => handleDeclineTask(booking)}
-                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
-                              >
-                                Decline Task
-                              </button>
-                            </>
-                          )}
-
-                          {booking.status === "in-progress" && (
+                            )
+                          ) : (
                             <>
-                              <button
-                                onClick={() =>
-                                  updateBookingStatus(booking._id, "completed")
-                                }
-                                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
-                              >
-                                Mark Complete
-                              </button>
-                              <button
-                                onClick={() => handleDeclineTask(booking)}
-                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
-                              >
-                                Decline Task
-                              </button>
+                              {/* Task Status Actions */}
+                              {(booking.status === "pending" ||
+                                booking.status === "confirmed") && (
+                                <>
+                                  {/*assigned task buttons */}
+                                  <button
+                                    onClick={() =>
+                                      updateBookingStatus(booking._id, "in-progress")
+                                    }
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                                  >
+                                    Start Task
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeclineTask(booking)}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                                  >
+                                    Decline Task
+                                  </button>
+                                </>
+                              )}
+
+                              {booking.status === "in-progress" && (
+                                <>
+                                  <button
+                                    onClick={() =>
+                                      updateBookingStatus(booking._id, "completed")
+                                    }
+                                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                                  >
+                                    Mark Complete
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeclineTask(booking)}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                                  >
+                                    Decline Task
+                                  </button>
+                                </>
+                              )}
                             </>
                           )}
 
