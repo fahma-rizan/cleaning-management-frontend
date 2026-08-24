@@ -62,6 +62,7 @@ interface Booking {
   deliveryStaffName?: string;
   isPickupStaff?: boolean;
   isDeliveryStaff?: boolean;
+  hasPendingDecline?: boolean;
 }
 
 export default function StaffDashboard({
@@ -865,12 +866,18 @@ export default function StaffDashboard({
                                   >
                                     Start Task
                                   </button>
-                                  <button
-                                    onClick={() => handleDeclineTask(booking)}
-                                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
-                                  >
-                                    Decline Task
-                                  </button>
+                                  {booking.hasPendingDecline ? (
+                                    <span className="px-4 py-2 bg-orange-100 text-orange-700 rounded-lg text-sm font-medium">
+                                      Awaiting Admin Approval
+                                    </span>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleDeclineTask(booking)}
+                                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                                    >
+                                      Decline Task
+                                    </button>
+                                  )}
                                 </>
                               )}
 
@@ -884,12 +891,18 @@ export default function StaffDashboard({
                                   >
                                     Mark Complete
                                   </button>
-                                  <button
-                                    onClick={() => handleDeclineTask(booking)}
-                                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
-                                  >
-                                    Decline Task
-                                  </button>
+                                  {booking.hasPendingDecline ? (
+                                    <span className="px-4 py-2 bg-orange-100 text-orange-700 rounded-lg text-sm font-medium">
+                                      Awaiting Admin Approval
+                                    </span>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleDeclineTask(booking)}
+                                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                                    >
+                                      Decline Task
+                                    </button>
+                                  )}
                                 </>
                               )}
                             </>
