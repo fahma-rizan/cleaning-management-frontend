@@ -174,10 +174,38 @@ export default function CustomerDashboard({
     });
 
   const totalBookings = bookings.filter((b) => b.status !== 'cancelled').length;
-  const activeServices = bookings.filter((b) => b.status === 'in-progress').length;
+  const inProgressBookings = bookings.filter((b) => b.status === 'in-progress');
+  const activeServices = inProgressBookings.length;
+  const activeBooking = inProgressBookings[0]; // real in-progress booking, if any — drives the Ongoing Activity card
   const nextAppointment = upcomingBookings.length > 0
     ? new Date(upcomingBookings[0].date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     : '—';
+
+  // Maps a real Booking doc into the shape both the inline Overview card and
+  // OngoingActivityPanel expect. No source for a live per-minute ETA/GPS
+  // feed exists yet, so ETA is derived from the booked time slot's end
+  // instead of being fabricated.
+  const toActivityCardData = (b: any) => {
+    const staffName = b.assignedStaffName || b.assignedTeam?.[0]?.staffName || 'Staff to be assigned';
+    const initials = staffName
+      .split(' ')
+      .map((w: string) => w[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || '—';
+    const slotEnd = (b.time || '').split(' - ')[1] || b.time || '—';
+    return {
+      bookingId: b.bookingId,
+      serviceName: b.serviceCategory || b.serviceName || 'Cleaning Service',
+      serviceType: b.serviceType || 'Home/Office Cleaning',
+      staff: { name: staffName, initials, avatar: initials, role: 'Service Professional' },
+      status: 'in-progress' as const,
+      address: b.address || '',
+      startTime: b.taskStartedAt ? new Date(b.taskStartedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : (b.time || '').split(' - ')[0] || '—',
+      eta: slotEnd,
+    };
+  };
 
   const handleReschedule = (booking: any) => {
     setSelectedBooking(booking);
@@ -310,138 +338,148 @@ export default function CustomerDashboard({
         />
 
         <div className="flex flex-col gap-6">
-          {/* Row 1: Ongoing Activity Card */}
-          <div className="w-full">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm">
-              {/* Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">🔄</span>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                    Ongoing Activity
-                  </h3>
-                  <div className="flex items-center gap-2 px-3 py-1 bg-green-50 dark:bg-green-900/20 rounded-full">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span className="text-xs font-bold text-green-700 dark:text-green-400">
-                      1 Active
-                    </span>
+          {/* Row 1: Ongoing Activity Card — only rendered when there's a real
+              in-progress booking. Used to always show a fabricated "BK-1001 /
+              Maria Chen" card regardless of whether anything was actually
+              ongoing; now driven entirely by activeBooking. */}
+          {activeBooking && (() => {
+            const activity = toActivityCardData(activeBooking);
+            return (
+              <div className="w-full">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm">
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">🔄</span>
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                        Ongoing Activity
+                      </h3>
+                      <div className="flex items-center gap-2 px-3 py-1 bg-green-50 dark:bg-green-900/20 rounded-full">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <span className="text-xs font-bold text-green-700 dark:text-green-400">
+                          {activeServices} Active
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={goToOngoing}
+                      className="text-sm font-bold text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 flex items-center gap-1"
+                    >
+                      View All
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
                   </div>
-                </div>
-                <button
-                  onClick={goToOngoing}
-                  className="text-sm font-bold text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 flex items-center gap-1"
-                >
-                  View All
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
 
-              {/* Booking Summary */}
-              <div className="mb-6 p-4 bg-purple-50 dark:bg-purple-900/10 rounded-xl">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h4 className="font-bold text-gray-900 dark:text-white mb-1">
-                      Home Cleaning - Regular Cleaning
-                    </h4>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                      Booking ID: BK-1001
-                    </p>
+                  {/* Booking Summary */}
+                  <div className="mb-6 p-4 bg-purple-50 dark:bg-purple-900/10 rounded-xl">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h4 className="font-bold text-gray-900 dark:text-white mb-1">
+                          {activity.serviceType} - {activity.serviceName}
+                        </h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                          Booking ID: {activity.bookingId}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                          ETA
+                        </p>
+                        <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                          {activity.eta}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 pt-3 border-t border-purple-100 dark:border-purple-800">
+                      <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                        {activity.staff.initials}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900 dark:text-white">
+                          {activity.staff.name}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {activity.staff.role}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                      ETA
-                    </p>
-                    <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
-                      12:30 PM
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 pt-3 border-t border-purple-100 dark:border-purple-800">
-                  <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                    MC
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">
-                      Maria Chen
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Service Professional
-                    </p>
-                  </div>
-                </div>
-              </div>
 
-              {/* Mini Progress Timeline */}
-              <div className="mb-6">
-                <div className="flex items-center justify-between relative">
-                  {/* Progress Line */}
-                  <div className="absolute top-4 left-0 right-0 h-0.5 bg-gray-200 dark:bg-gray-700"></div>
-                  <div
-                    className="absolute top-4 left-0 h-0.5 bg-purple-600"
-                    style={{ width: "66%" }}
-                  ></div>
+                  {/* Mini Progress Timeline — no granular per-stage tracking
+                      exists yet, so "in-progress" honestly maps to "started,
+                      currently in progress, not yet completed" rather than
+                      fabricating exact stage timestamps. */}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between relative">
+                      {/* Progress Line */}
+                      <div className="absolute top-4 left-0 right-0 h-0.5 bg-gray-200 dark:bg-gray-700"></div>
+                      <div
+                        className="absolute top-4 left-0 h-0.5 bg-purple-600"
+                        style={{ width: "66%" }}
+                      ></div>
 
-                  {/* Steps */}
-                  {["En Route", "Started", "In Progress", "Completed"].map(
-                    (step, idx) => {
-                      const isCompleted = idx < 2;
-                      const isCurrent = idx === 2;
-                      const isPending = idx > 2;
+                      {/* Steps */}
+                      {["En Route", "Started", "In Progress", "Completed"].map(
+                        (step, idx) => {
+                          const isCompleted = idx < 2;
+                          const isCurrent = idx === 2;
 
-                      return (
-                        <div
-                          key={step}
-                          className="flex flex-col items-center relative z-10 flex-1"
-                        >
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center border-2 mb-2 transition-all ${
-                              isCompleted
-                                ? "bg-purple-600 border-purple-600"
-                                : isCurrent
-                                  ? "bg-white dark:bg-gray-800 border-purple-600 ring-4 ring-purple-100 dark:ring-purple-900/30"
-                                  : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
-                            }`}
-                          >
-                            {isCompleted ? (
-                              <span className="text-white text-lg">✓</span>
-                            ) : (
-                              <span
-                                className={`text-xs font-bold ${
-                                  isCurrent
-                                    ? "text-purple-600"
-                                    : "text-gray-400"
+                          return (
+                            <div
+                              key={step}
+                              className="flex flex-col items-center relative z-10 flex-1"
+                            >
+                              <div
+                                className={`w-8 h-8 rounded-full flex items-center justify-center border-2 mb-2 transition-all ${
+                                  isCompleted
+                                    ? "bg-purple-600 border-purple-600"
+                                    : isCurrent
+                                      ? "bg-white dark:bg-gray-800 border-purple-600 ring-4 ring-purple-100 dark:ring-purple-900/30"
+                                      : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
                                 }`}
                               >
-                                {idx + 1}
-                              </span>
-                            )}
-                          </div>
-                          <p
-                            className={`text-[10px] font-bold text-center ${
-                              isCurrent
-                                ? "text-purple-600 dark:text-purple-400"
-                                : "text-gray-500 dark:text-gray-400"
-                            }`}
-                          >
-                            {step}
-                          </p>
-                        </div>
-                      );
-                    },
-                  )}
+                                {isCompleted ? (
+                                  <span className="text-white text-lg">✓</span>
+                                ) : (
+                                  <span
+                                    className={`text-xs font-bold ${
+                                      isCurrent
+                                        ? "text-purple-600"
+                                        : "text-gray-400"
+                                    }`}
+                                  >
+                                    {idx + 1}
+                                  </span>
+                                )}
+                              </div>
+                              <p
+                                className={`text-[10px] font-bold text-center ${
+                                  isCurrent
+                                    ? "text-purple-600 dark:text-purple-400"
+                                    : "text-gray-500 dark:text-gray-400"
+                                }`}
+                              >
+                                {step}
+                              </p>
+                            </div>
+                          );
+                        },
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Track Button */}
+                  <button
+                    onClick={goToOngoing}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20"
+                  >
+                    Track Your Booking
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
                 </div>
               </div>
-
-              {/* Track Button */}
-              <button
-                onClick={goToOngoing}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20"
-              >
-                Track Your Booking
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Row 2: Upcoming Booking or Empty State */}
           <div className="w-full">
@@ -466,23 +504,6 @@ export default function CustomerDashboard({
   };
 
   const renderBookings = () => {
-    // Mock ongoing booking data
-    const ongoingBooking = {
-      bookingId: "BK-1001",
-      serviceName: "Home Cleaning",
-      serviceType: "Regular Cleaning",
-      staff: {
-        name: "Maria Chen",
-        avatar: "MC",
-        role: "Service Professional",
-      },
-      status: "in-progress" as const,
-      address: "123 Oak Street, Unit 4B",
-      startTime: "9:00 AM",
-      eta: "12:30 PM",
-      progress: 68,
-    };
-
     const ongoingBookings = bookings.filter(
       (b) => b.status !== "completed" && b.status !== "cancelled",
     );
@@ -541,14 +562,18 @@ export default function CustomerDashboard({
         {/* Content */}
         <div>
           {bookingTab === "ongoing" &&
-            (ongoingBookings.length > 0 ? (
+            (activeBooking ? (
               <div className="space-y-6">
-                <OngoingActivityPanel />
+                <OngoingActivityPanel booking={toActivityCardData(activeBooking)} />
               </div>
             ) : (
-              <div className="space-y-6">
-                <OngoingActivityPanel />
-              </div>
+              <EmptyState
+                icon={ClipboardList}
+                title="Nothing in progress right now"
+                message="Once a booked service actually starts, you'll see live tracking here."
+                actionLabel="Book a Service"
+                actionLink="/services"
+              />
             ))}
 
           {/*upcoming*/} {/*book a service button*/}
