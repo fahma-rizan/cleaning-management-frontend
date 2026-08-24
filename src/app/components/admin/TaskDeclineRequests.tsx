@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Clock, CheckCircle, XCircle, RefreshCw, ClipboardX } from 'lucide-react';
 import { fetchWithAuth } from '../../utils/api';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '../ui/confirm-dialog';
 
 interface DeclineRequestRow {
   _id: string;
@@ -29,6 +30,7 @@ export function TaskDeclineRequests() {
   const [filter, setFilter]     = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('Pending');
   const [loading, setLoading]   = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ row: DeclineRequestRow; type: 'approve' | 'reject' } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -47,7 +49,6 @@ export function TaskDeclineRequests() {
   const pendingCount = requests.filter(r => r.status === 'pending').length;
 
   const approve = async (r: DeclineRequestRow) => {
-    if (!window.confirm(`Approve ${r.staffName}'s decline request for "${r.booking?.serviceName || r.bookingRef}"? The task will be unassigned from them and a replacement will be sought automatically.`)) return;
     setActingId(r._id);
     try {
       const data = await fetchWithAuth(`/staff-requests/decline/${r._id}/approve`, { method: 'PATCH', body: JSON.stringify({}) });
@@ -67,7 +68,6 @@ export function TaskDeclineRequests() {
   };
 
   const reject = async (r: DeclineRequestRow) => {
-    if (!window.confirm(`Reject ${r.staffName}'s decline request? The task will remain assigned to them and must be completed.`)) return;
     setActingId(r._id);
     try {
       const data = await fetchWithAuth(`/staff-requests/decline/${r._id}/reject`, { method: 'PATCH', body: JSON.stringify({}) });
@@ -150,14 +150,14 @@ export function TaskDeclineRequests() {
                   {r.status === 'pending' && (
                     <div className="flex gap-2 flex-shrink-0">
                       <button
-                        onClick={() => approve(r)}
+                        onClick={() => setConfirmAction({ row: r, type: 'approve' })}
                         disabled={actingId === r._id}
                         className="flex items-center gap-1 text-xs px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
                       >
                         <CheckCircle className="w-3.5 h-3.5" /> Approve
                       </button>
                       <button
-                        onClick={() => reject(r)}
+                        onClick={() => setConfirmAction({ row: r, type: 'reject' })}
                         disabled={actingId === r._id}
                         className="flex items-center gap-1 text-xs px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
                       >
@@ -171,6 +171,27 @@ export function TaskDeclineRequests() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmAction}
+        onOpenChange={(open) => { if (!open) setConfirmAction(null); }}
+        title={confirmAction?.type === 'approve' ? 'Approve decline request?' : 'Reject decline request?'}
+        description={
+          confirmAction
+            ? confirmAction.type === 'approve'
+              ? `Approve ${confirmAction.row.staffName}'s decline request for "${confirmAction.row.booking?.serviceName || confirmAction.row.bookingRef}"? The task will be unassigned from them and a replacement will be sought automatically.`
+              : `Reject ${confirmAction.row.staffName}'s decline request? The task will remain assigned to them and must be completed.`
+            : ''
+        }
+        confirmLabel={confirmAction?.type === 'approve' ? 'Approve' : 'Reject'}
+        variant={confirmAction?.type === 'reject' ? 'destructive' : 'default'}
+        onConfirm={() => {
+          if (!confirmAction) return;
+          const { row, type } = confirmAction;
+          setConfirmAction(null);
+          if (type === 'approve') approve(row); else reject(row);
+        }}
+      />
     </div>
   );
 }

@@ -25,6 +25,7 @@ import { Label } from "../ui/label";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Pagination } from "../ui/pagination";
 import { toast } from "sonner";
+import { ConfirmDialog } from "../ui/confirm-dialog";
 import {
   type AdminRole,
   getAdminRowActions,
@@ -71,6 +72,12 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
   const [editingAdmin, setEditingAdmin] = useState<AdminUser | null>(null);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [viewingAdmin, setViewingAdmin] = useState<AdminUser | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    title: string;
+    description: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+  } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Form State
@@ -235,13 +242,19 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
   const handleDelete = async (id: string) => {
     const target = admins.find((a) => a._id === id);
     if (target?.isSuperAdmin) return;
-    if (!window.confirm("Are you sure you want to remove this admin?")) return;
-    try {
-      await adminAPI.delete(id);
-      setAdmins((prev) => prev.filter((a) => a._id !== id));
-    } catch (err: any) {
-      alert(err.error || "Failed to delete admin");
-    }
+    setConfirmAction({
+      title: "Remove admin?",
+      description: "Are you sure you want to remove this admin?",
+      confirmLabel: "Remove",
+      onConfirm: async () => {
+        try {
+          await adminAPI.delete(id);
+          setAdmins((prev) => prev.filter((a) => a._id !== id));
+        } catch (err: any) {
+          toast.error(err.error || "Failed to delete admin");
+        }
+      },
+    });
   };
 
   const handleViewDetails = (admin: AdminUser) => {
@@ -256,19 +269,24 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
 
   const handleDeactivate = async (admin: AdminUser) => {
     if (admin.isSuperAdmin) return;
-    if (!window.confirm(`Are you sure you want to deactivate ${admin.name}?`))
-      return;
-    try {
-      await adminAPI.deactivate(admin._id);
-      setAdmins((prev) =>
-        prev.map((a) =>
-          a._id === admin._id ? { ...a, status: "Inactive" as "Inactive" } : a,
-        ),
-      );
-    } catch (err: any) {
-      alert(err.error || "Failed to deactivate admin");
-    }
     setOpenDropdown(null);
+    setConfirmAction({
+      title: "Deactivate admin?",
+      description: `Are you sure you want to deactivate ${admin.name}?`,
+      confirmLabel: "Deactivate",
+      onConfirm: async () => {
+        try {
+          await adminAPI.deactivate(admin._id);
+          setAdmins((prev) =>
+            prev.map((a) =>
+              a._id === admin._id ? { ...a, status: "Inactive" as "Inactive" } : a,
+            ),
+          );
+        } catch (err: any) {
+          toast.error(err.error || "Failed to deactivate admin");
+        }
+      },
+    });
   };
 
   const handleActivate = async (admin: AdminUser) => {
@@ -288,15 +306,20 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
 
   const handleDeleteAdmin = async (admin: AdminUser) => {
     if (admin.isSuperAdmin) return;
-    if (!window.confirm(`Are you sure you want to delete ${admin.name}? This action cannot be undone.`))
-      return;
-    try {
-      await adminAPI.delete(admin._id);
-      setAdmins((prev) => prev.filter((a) => a._id !== admin._id));
-    } catch (err: any) {
-      alert(err.error || "Failed to delete admin");
-    }
     setOpenDropdown(null);
+    setConfirmAction({
+      title: "Delete admin?",
+      description: `Are you sure you want to delete ${admin.name}? This action cannot be undone.`,
+      confirmLabel: "Delete",
+      onConfirm: async () => {
+        try {
+          await adminAPI.delete(admin._id);
+          setAdmins((prev) => prev.filter((a) => a._id !== admin._id));
+        } catch (err: any) {
+          toast.error(err.error || "Failed to delete admin");
+        }
+      },
+    });
   };
 
   // In a real app, these handlers would make API calls and refresh the list from the server
@@ -938,6 +961,20 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!confirmAction}
+        onOpenChange={(open) => { if (!open) setConfirmAction(null); }}
+        title={confirmAction?.title || ""}
+        description={confirmAction?.description || ""}
+        confirmLabel={confirmAction?.confirmLabel}
+        variant="destructive"
+        onConfirm={() => {
+          const action = confirmAction;
+          setConfirmAction(null);
+          action?.onConfirm();
+        }}
+      />
     </div>
   );
 }

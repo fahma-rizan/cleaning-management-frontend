@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Clock, CheckCircle, XCircle, RefreshCw, UserX } from 'lucide-react';
 import { fetchWithAuth } from '../../utils/api';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '../ui/confirm-dialog';
 
 interface AvailabilityRequestRow {
   _id: string;
@@ -26,6 +27,7 @@ export function AvailabilityRequests() {
   const [filter, setFilter]     = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('Pending');
   const [loading, setLoading]   = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ row: AvailabilityRequestRow; type: 'approve' | 'reject' } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -44,7 +46,6 @@ export function AvailabilityRequests() {
   const pendingCount = requests.filter(r => r.status === 'pending').length;
 
   const approve = async (r: AvailabilityRequestRow) => {
-    if (!window.confirm(`Approve ${r.staffName}'s unavailability request? They will immediately be marked Unavailable.`)) return;
     setActingId(r._id);
     try {
       const data = await fetchWithAuth(`/staff-requests/availability/${r._id}/approve`, { method: 'PATCH', body: JSON.stringify({}) });
@@ -64,7 +65,6 @@ export function AvailabilityRequests() {
   };
 
   const reject = async (r: AvailabilityRequestRow) => {
-    if (!window.confirm(`Reject ${r.staffName}'s unavailability request? They will remain Available.`)) return;
     setActingId(r._id);
     try {
       const data = await fetchWithAuth(`/staff-requests/availability/${r._id}/reject`, { method: 'PATCH', body: JSON.stringify({}) });
@@ -142,14 +142,14 @@ export function AvailabilityRequests() {
                   {r.status === 'pending' && (
                     <div className="flex gap-2 flex-shrink-0">
                       <button
-                        onClick={() => approve(r)}
+                        onClick={() => setConfirmAction({ row: r, type: 'approve' })}
                         disabled={actingId === r._id}
                         className="flex items-center gap-1 text-xs px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
                       >
                         <CheckCircle className="w-3.5 h-3.5" /> Approve
                       </button>
                       <button
-                        onClick={() => reject(r)}
+                        onClick={() => setConfirmAction({ row: r, type: 'reject' })}
                         disabled={actingId === r._id}
                         className="flex items-center gap-1 text-xs px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
                       >
@@ -163,6 +163,27 @@ export function AvailabilityRequests() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmAction}
+        onOpenChange={(open) => { if (!open) setConfirmAction(null); }}
+        title={confirmAction?.type === 'approve' ? 'Approve unavailability request?' : 'Reject unavailability request?'}
+        description={
+          confirmAction
+            ? confirmAction.type === 'approve'
+              ? `Approve ${confirmAction.row.staffName}'s unavailability request? They will immediately be marked Unavailable.`
+              : `Reject ${confirmAction.row.staffName}'s unavailability request? They will remain Available.`
+            : ''
+        }
+        confirmLabel={confirmAction?.type === 'approve' ? 'Approve' : 'Reject'}
+        variant={confirmAction?.type === 'reject' ? 'destructive' : 'default'}
+        onConfirm={() => {
+          if (!confirmAction) return;
+          const { row, type } = confirmAction;
+          setConfirmAction(null);
+          if (type === 'approve') approve(row); else reject(row);
+        }}
+      />
     </div>
   );
 }

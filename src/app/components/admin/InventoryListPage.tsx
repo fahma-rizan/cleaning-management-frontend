@@ -13,6 +13,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import Header from '../Header';
+import { ConfirmDialog } from '../ui/confirm-dialog';
 import type { User } from '../../types';
 
 interface InventoryItem {
@@ -47,6 +48,7 @@ export default function InventoryListPage({
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [confirmAction, setConfirmAction] = useState<{ title: string; description: string; onConfirm: () => void } | null>(null);
 
   useEffect(() => {
     loadInventory();
@@ -214,21 +216,29 @@ export default function InventoryListPage({
   });
 
   const handleDelete = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this item?')) {
-      const updatedItems = items.filter(item => item.id !== id);
-      setItems(updatedItems);
-      localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
-    }
+    setConfirmAction({
+      title: 'Delete item?',
+      description: 'Are you sure you want to delete this item?',
+      onConfirm: () => {
+        const updatedItems = items.filter(item => item.id !== id);
+        setItems(updatedItems);
+        localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
+      },
+    });
   };
 
   const handleBulkDelete = () => {
     if (selectedItems.length === 0) return;
-    if (window.confirm(`Delete ${selectedItems.length} selected items?`)) {
-      const updatedItems = items.filter(item => !selectedItems.includes(item.id));
-      setItems(updatedItems);
-      localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
-      setSelectedItems([]);
-    }
+    setConfirmAction({
+      title: 'Delete selected items?',
+      description: `Delete ${selectedItems.length} selected items?`,
+      onConfirm: () => {
+        const updatedItems = items.filter(item => !selectedItems.includes(item.id));
+        setItems(updatedItems);
+        localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
+        setSelectedItems([]);
+      },
+    });
   };
 
   const toggleSelectItem = (id: string) => {
@@ -523,6 +533,20 @@ export default function InventoryListPage({
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!confirmAction}
+        onOpenChange={(open) => { if (!open) setConfirmAction(null); }}
+        title={confirmAction?.title || ''}
+        description={confirmAction?.description || ''}
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          const action = confirmAction;
+          setConfirmAction(null);
+          action?.onConfirm();
+        }}
+      />
     </div>
   );
 }

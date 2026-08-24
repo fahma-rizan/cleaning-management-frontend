@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, XCircle, RefreshCw, User, Calendar, Clock, MapPin, Bell } from 'lucide-react';
 import { fetchWithAuth } from '../../utils/api';
+import { ConfirmDialog } from '../ui/confirm-dialog';
 
 interface DeclinedTask {
   id: string;
@@ -56,6 +57,7 @@ export function TaskReassignmentManagement() {
   const [declinedTasks, setDeclinedTasks] = useState<DeclinedTask[]>([]);
   const [reassignments, setReassignments] = useState<Reassignment[]>([]);
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [activeView, setActiveView] = useState<'notifications' | 'declined' | 'reassigned'>('notifications');
 
   useEffect(() => {
@@ -81,9 +83,7 @@ export function TaskReassignmentManagement() {
   };
 
   const clearAllNotifications = () => {
-    if (window.confirm('Are you sure you want to clear all notifications?')) {
-      setNotifications([]);
-    }
+    setConfirmClearOpen(true);
   };
 
   const unreadCount = notifications.filter(n => n.status === 'unread').length;
@@ -421,6 +421,19 @@ export function TaskReassignmentManagement() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmClearOpen}
+        onOpenChange={setConfirmClearOpen}
+        title="Clear all notifications?"
+        description="Are you sure you want to clear all notifications?"
+        confirmLabel="Clear"
+        variant="destructive"
+        onConfirm={() => {
+          setConfirmClearOpen(false);
+          setNotifications([]);
+        }}
+      />
     </div>
   );
 }

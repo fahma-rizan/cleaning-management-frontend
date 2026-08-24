@@ -12,6 +12,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Badge } from "../ui/badge";
 import { toast } from "sonner";
+import { ConfirmDialog } from "../ui/confirm-dialog";
 import { Pagination } from "../ui/pagination";
 import { staffAPI, getPhotoUrl } from "../../lib/api";
 import { isValidEmail, isValidFullName, isValidPhone, isValidNIC } from "../../lib/validation";
@@ -81,6 +82,7 @@ export function StaffManagement() {
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -249,13 +251,6 @@ export function StaffManagement() {
   };
 
   const handleDelete = async (id: string) => {
-    if (
-      !window.confirm(
-        "Are you sure you want to delete this staff member? This action cannot be undone.",
-      )
-    ) {
-      return;
-    }
     setDeletingId(id);
     try {
       await staffAPI.delete(id);
@@ -680,7 +675,7 @@ export function StaffManagement() {
                               : "Deactivate"}
                           </button>
                           <button
-                            onClick={() => handleDelete(staff._id)}
+                            onClick={() => setConfirmDeleteId(staff._id)}
                             className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 border-t border-gray-100"
                           >
                             Delete
@@ -890,6 +885,20 @@ export function StaffManagement() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteId(null); }}
+        title="Delete staff member?"
+        description="Are you sure you want to delete this staff member? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          const id = confirmDeleteId;
+          setConfirmDeleteId(null);
+          if (id) handleDelete(id);
+        }}
+      />
     </div>
   );
 }
