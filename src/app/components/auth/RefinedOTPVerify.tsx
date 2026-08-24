@@ -3,15 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { MailCheck } from 'lucide-react';
 import { BrandHeader, AuthCard, AuthButton, AlertBanner, StaffFooter } from './AuthShared';
 
-interface Props {
-  onLogin?: (user: any) => void;
-}
-
 // Matches the backend's actual OTP expiry window (controllers/authController.js
 // sets otpExpiry 10 minutes out) — this is a real countdown, not decoration.
 const OTP_LIFETIME_SECONDS = 10 * 60;
 
-export default function RefinedOTPVerify({ onLogin }: Props) {
+export default function RefinedOTPVerify() {
   const navigate = useNavigate();
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
@@ -76,9 +72,13 @@ export default function RefinedOTPVerify({ onLogin }: Props) {
       const data = await response.json();
 
       if (data.success) {
-        // Store token and user, then go to success page
-        localStorage.setItem('token', data.token);
-        if (onLogin) onLogin(data.user);
+        // FIX: this used to store the token and call onLogin here, which
+        // auto-logged the customer in immediately after verifying — so by
+        // the time they hit the success screen's "Go to Sign In" button,
+        // the /login route saw an already-logged-in user and redirected
+        // straight to /dashboard instead of showing the sign-in form.
+        // Registration should end at sign-in, not skip it, so we no longer
+        // authenticate here at all — just send them to the success screen.
         sessionStorage.removeItem('pendingEmail');
         setSuccess('Email verified successfully!');
         setTimeout(() => navigate('/success?type=registration'), 1000);

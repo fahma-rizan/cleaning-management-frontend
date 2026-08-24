@@ -170,7 +170,7 @@ export default function App() {
             <Route path="register/staff" element={<StaffApplication />} />
             <Route path="register/admin" element={<RegisterAdmin />} />
             <Route path="complete-profile" element={<CompleteProfile />} />
-            <Route path="otp-verify" element={<RefinedOTPVerify onLogin={handleLogin} />} />
+            <Route path="otp-verify" element={<RefinedOTPVerify />} />
             <Route path="forgot-password" element={<RefinedForgotPassword />} />
             <Route
               path="verify-reset-code"
