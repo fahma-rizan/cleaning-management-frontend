@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import {
   ClipboardList,
   CheckCircle,
@@ -322,9 +323,7 @@ export default function StaffDashboard({
     setShowMaterialForm(false);
     setSelectedTaskForMaterial(null);
 
-    alert(
-      `✅ Material usage report submitted to admin successfully!\\n\\n${usedItems.length} items recorded.`,
-    );
+    toast.success(`Material usage report submitted — ${usedItems.length} items recorded.`);
   };
 
   // Opens decline modal
@@ -339,7 +338,7 @@ export default function StaffDashboard({
     if (!selectedTaskToDecline) return;
 
     if (!declineReason.trim()) {
-      alert("⚠️ Please provide a reason for declining this task.");
+      toast.error("Please provide a reason for declining this task.");
       return;
     }
 
@@ -357,16 +356,16 @@ export default function StaffDashboard({
         setSelectedTaskToDecline(null);
         setDeclineReason("");
         await fetchBookings(false);
-        alert(
+        toast.success(
           result.message ||
-          `✅ Decline request sent to admin for approval.\n\nThe task remains assigned to you until the admin approves it.`,
+          "Decline request sent to admin for approval. The task remains assigned to you until the admin approves it.",
         );
       } else {
-        alert("Failed to decline task: " + result.message);
+        toast.error("Failed to decline task: " + result.message);
       }
     } catch (err) {
       console.error('Decline task error:', err);
-      alert("Failed to decline task. Please try again.");
+      toast.error("Failed to decline task. Please try again.");
     }
   };
 
@@ -383,7 +382,7 @@ export default function StaffDashboard({
       const data = await fetchWithAuth('/staff-requests/availability/end', { method: 'PATCH' });
       if (data.success) {
         setIsAvailable(true);
-        alert("✅ You are now AVAILABLE for service today.");
+        toast.success("You are now AVAILABLE for service today.");
       }
     } catch (err) {
       console.error('End unavailability error:', err);
@@ -392,7 +391,7 @@ export default function StaffDashboard({
 
   const submitUnavailabilityRequest = async () => {
     if (!unavailableReason.trim()) {
-      alert("⚠️ Please provide a reason for going unavailable.");
+      toast.error("Please provide a reason for going unavailable.");
       return;
     }
     setSubmittingUnavailable(true);
@@ -405,13 +404,13 @@ export default function StaffDashboard({
         setPendingAvailabilityRequest(data.request);
         setShowUnavailableModal(false);
         setUnavailableReason("");
-        alert(data.message || "Unavailability request submitted — waiting for admin approval.");
+        toast.success(data.message || "Unavailability request submitted — waiting for admin approval.");
       } else {
-        alert(data.message || "Failed to submit request.");
+        toast.error(data.message || "Failed to submit request.");
       }
     } catch (err) {
       console.error('Request unavailability error:', err);
-      alert("Failed to submit request. Please try again.");
+      toast.error("Failed to submit request. Please try again.");
     } finally {
       setSubmittingUnavailable(false);
     }
@@ -436,8 +435,8 @@ export default function StaffDashboard({
           ),
         );
         if (status === "completed") {
-          alert(
-            "✅ Service marked as completed! Customer has been notified and can now submit a review or complaint.",
+          toast.success(
+            "Service marked as completed! Customer has been notified and can now submit a review or complaint.",
           );
         }
       }
@@ -466,14 +465,14 @@ export default function StaffDashboard({
             : b,
         ));
         if (nextStage === "completed") {
-          alert("✅ Laundry delivered and completed! Customer has been notified.");
+          toast.success("Laundry delivered and completed! Customer has been notified.");
         }
       } else {
-        alert(result.message || "Failed to update laundry status.");
+        toast.error(result.message || "Failed to update laundry status.");
       }
     } catch (err) {
       console.error('advanceLaundryStage error:', err);
-      alert("Failed to update laundry status. Please try again.");
+      toast.error("Failed to update laundry status. Please try again.");
     }
   };
 
@@ -952,12 +951,12 @@ export default function StaffDashboard({
                               try {
                                 const result = await fetchWithAuth(`/bookings/${booking._id}/send-invoice`, { method: 'POST' });
                                 if (result.success) {
-                                  alert(`✅ ${result.message}`);
+                                  toast.success(result.message);
                                 } else {
-                                  alert(`❌ ${result.message}`);
+                                  toast.error(result.message);
                                 }
                               } catch {
-                                alert('❌ Failed to send invoice. Please try again.');
+                                toast.error('Failed to send invoice. Please try again.');
                               }
                               setSendingInvoiceId(null);
                             }}
@@ -1067,9 +1066,9 @@ export default function StaffDashboard({
                                 setSendingInvoiceId(booking._id);
                                 try {
                                   const result = await fetchWithAuth(`/bookings/${booking._id}/send-invoice`, { method: 'POST' });
-                                  alert(result.success ? `✅ ${result.message}` : `❌ ${result.message}`);
+                                  result.success ? toast.success(result.message) : toast.error(result.message);
                                 } catch {
-                                  alert('❌ Failed to send invoice.');
+                                  toast.error('Failed to send invoice.');
                                 }
                                 setSendingInvoiceId(null);
                               }}
