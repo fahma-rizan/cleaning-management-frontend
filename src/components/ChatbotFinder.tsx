@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { MessageCircle, Send, Bot, User as UserIcon, ExternalLink, X } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { api } from '../services/api.service';
 
 interface Message {
   id: string;
@@ -292,12 +293,13 @@ export default function ChatbotFinder() {
     },
   ]);
   const [inputText, setInputText] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isTyping]);
 
   const addMessage = (sender: 'bot' | 'user', text: string, options?: string[], serviceLinks?: any[], categoryLink?: any) => {
     setMessages(prev => [...prev, { id: Date.now().toString(), sender, text, options, serviceLinks, categoryLink }]);
@@ -512,10 +514,27 @@ export default function ChatbotFinder() {
     const text = inputText;
     addMessage('user', text);
     setInputText('');
-    setTimeout(() => {
-      const response = getResponseFromText(text);
-      addMessage('bot', response.text, response.options, response.serviceLinks, response.categoryLink);
-    }, 400);
+    setIsTyping(true);
+
+    // Build conversation history in the shape the backend expects,
+    // from whatever's already on screen (before this new message).
+    const history = messages
+      .filter(m => m.text) // skip anything without visible text
+      .map(m => ({ sender: m.sender, text: m.text }));
+
+    api
+      .post('/chatbot/chat', { message: text, history })
+      .then((data: any) => {
+        if (!data?.success) throw new Error(data?.message || 'Chat request failed');
+        addMessage('bot', data.reply, undefined, data.serviceLinks);
+      })
+      .catch(() => {
+        // Backend/AI unavailable — fall back to the local rule-based responder
+        // so the widget still gives a useful answer instead of dying silently.
+        const response = getResponseFromText(text);
+        addMessage('bot', response.text, response.options, response.serviceLinks, response.categoryLink);
+      })
+      .finally(() => setIsTyping(false));
   };
 
   return (
@@ -602,6 +621,16 @@ export default function ChatbotFinder() {
                 </div>
               </div>
             ))}
+            {isTyping && (
+              <div className="flex items-center gap-2 text-gray-400 text-sm px-1">
+                <Bot className="w-4 h-4" />
+                <span className="flex gap-1">
+                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" />
+                </span>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
@@ -612,12 +641,13 @@ export default function ChatbotFinder() {
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                onKeyPress={(e) => e.key === 'Enter' && !isTyping && handleSendMessage()}
                 placeholder="Ask about any service..."
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm bg-white"
+                disabled={isTyping}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm bg-white disabled:opacity-60"
               />
-              <button onClick={handleSendMessage}
-                className="bg-purple-600 text-white p-2 rounded-lg hover:bg-purple-700 transition-colors">
+              <button onClick={handleSendMessage} disabled={isTyping}
+                className="bg-purple-600 text-white p-2 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
                 <Send className="w-5 h-5" />
               </button>
             </div>

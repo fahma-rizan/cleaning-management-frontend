@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Calendar, Clock, MapPin, DollarSign, Home, Users, Minus, Plus, ShieldCheck, CheckCircle2, Sofa, Shirt } from 'lucide-react';
+import { Calendar, Clock, MapPin, DollarSign, Home, Users, Minus, Plus, ShieldCheck, CheckCircle2, Sofa } from 'lucide-react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import Header from './Header';
@@ -9,9 +9,23 @@ import AIEstimator from './AIEstimator';
 import DryCleaningPriceList from './DryCleaningPriceList';
 import WashingPressingPriceList from './WashingPressingPriceList';
 import PressingPriceList from './PressingPriceList';
+import AddressInput, { emptyAddress, isAddressComplete, type StructuredAddress } from './AddressInput';
 import type { User } from '../types';
 import type { FormEvent } from 'react';
-import { api } from '../services/api.service';
+const fetchWithAuth = async (path: string, options: RequestInit = {}) => {
+  const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+  const headers = new Headers(options.headers);
+  headers.set('Content-Type', 'application/json');
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  const apiBase = ((import.meta as ImportMeta & {
+    env?: { VITE_API_URL?: string };
+  }).env?.VITE_API_URL || '').replace(/\/$/, '');
+  const response = await fetch(`${apiBase}/api${path}`, { ...options, headers });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.message || 'Request failed');
+  return data;
+};
 
 interface BookingProps {
   user: User;
@@ -76,15 +90,24 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
     '14': 'Carpet Cleaning',
   };
   
+  const parseLocalDate = (str: string) => {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+  const toLocalDateStr = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
   const [bookingData, setBookingData] = useState({
     date: '',
     time: '',
-    address: '',
+    address: '', // flattened string — still sent to backend, still what Payment/Invoice/GPS/dashboard read
+    addressDetails: emptyAddress as StructuredAddress, // structured breakdown, captured by AddressInput
     houseSize: 'medium',
     rooms: 2,
     bathrooms: 1,
     frequency: 'once',
-    cleaningType: 'normal', 
+    // Home/Office cleaning — per-sqft pricing
+    cleaningType: 'normal',
     squareFeet: 0,
     specialInstructions: '',
     packageType: 'standard',
@@ -105,13 +128,13 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
     carpetCount: 1,
     carpetSquareFeet: 50,
     mattressSquareFeet: 50,
-    mattressSize: 'Single Mattress',
-    mattressCleaningType: 'Full',
+    // Promo code
     promoCode: '',
     promoDiscount: 0,
     promoMessage: '',
     promoApplied: false,
   });
+  const [applyingPromo, setApplyingPromo] = useState(false);
 
   const isLaundryService = serviceId === '2';
   const isCurtainService = serviceId === '4';
@@ -123,45 +146,58 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
   const isWashingPressingService = serviceId === '10';
   const isPressingOnlyService = serviceId === '11';
   const isHomeCleaningService = ['1', '5', '6', '7', '8'].includes(serviceId || '');
-  
-  // ─── Home cleaning price map ──────────────────────────────────────────────────
-const homeCleaningPrices: Record<string, Record<string, number>> = {
-  '1': { normal: 25, 'move-in-out': 30, 'after-construction': 35 }, // House Deep Cleaning
-  '5': { normal: 25, 'move-in-out': 30, 'after-construction': 35 }, // Commercial Cleaning
-  '6': { general: 20 },                                              // General Cleaning
-  '7': { floor: 30 },                                                // Floor Cleaning
-  '8': { 'cut-polish': 35 },                                         // Floor Cut & Polish
-};
 
-const homeCleaningTypes: Record<string, { id: string; label: string }[]> = {
-  '1': [
-    { id: 'normal', label: 'Normal Deep Cleaning — LKR 25/sqft' },
-    { id: 'move-in-out', label: 'Move In / Move Out — LKR 30/sqft' },
-    { id: 'after-construction', label: 'After Construction — LKR 35/sqft' },
-  ],
-  '5': [
-    { id: 'normal', label: 'Normal Deep Cleaning — LKR 25/sqft' },
-    { id: 'move-in-out', label: 'Move In / Move Out — LKR 30/sqft' },
-    { id: 'after-construction', label: 'After Construction — LKR 35/sqft' },
-  ],
-  '6': [{ id: 'general', label: 'General Cleaning — LKR 20/sqft' }],
-  '7': [{ id: 'floor', label: 'Floor Cleaning — LKR 30/sqft' }],
-  '8': [{ id: 'cut-polish', label: 'Cut & Polish — LKR 35/sqft' }],
-};
+  // ─── Home cleaning price map (LKR per square foot, by cleaning type) ──────────
+  const homeCleaningPrices: Record<string, Record<string, number>> = {
+    '1': { normal: 25, 'move-in-out': 30, 'after-construction': 35 }, // House Deep Cleaning
+    '5': { normal: 25, 'move-in-out': 30, 'after-construction': 35 }, // Commercial Cleaning
+    '6': { general: 20 },                                              // General Cleaning
+    '7': { floor: 30 },                                                // Floor Cleaning
+    '8': { 'cut-polish': 35 },                                         // Floor Cut & Polish
+  };
+
+  const homeCleaningTypes: Record<string, { id: string; label: string }[]> = {
+    '1': [
+      { id: 'normal', label: 'Normal Deep Cleaning — LKR 25/sqft' },
+      { id: 'move-in-out', label: 'Move In / Move Out — LKR 30/sqft' },
+      { id: 'after-construction', label: 'After Construction — LKR 35/sqft' },
+    ],
+    '5': [
+      { id: 'normal', label: 'Normal Deep Cleaning — LKR 25/sqft' },
+      { id: 'move-in-out', label: 'Move In / Move Out — LKR 30/sqft' },
+      { id: 'after-construction', label: 'After Construction — LKR 35/sqft' },
+    ],
+    '6': [{ id: 'general', label: 'General Cleaning — LKR 20/sqft' }],
+    '7': [{ id: 'floor', label: 'Floor Cleaning — LKR 30/sqft' }],
+    '8': [{ id: 'cut-polish', label: 'Cut & Polish — LKR 35/sqft' }],
+  };
 
   const [estimatedPrice, setEstimatedPrice] = useState(0);
+  const [slotCounts, setSlotCounts] = useState<Record<string, number>>({});
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  const fetchSlotCounts = async (date: string) => {
+    if (!date) return;
+    try {
+      const data = await fetchWithAuth(`/bookings/slot-check?date=${date}`);
+      if (data.success) setSlotCounts(data.slotCounts);
+    } catch {
+      // silently ignore — slots won't show as disabled
+    }
+  };
 
   const timeSlots = [
-    '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM',
-    '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM',
-    '04:00 PM', '05:00 PM',
+    '9:00AM - 11:00AM',
+    '11:00AM - 1:00PM',
+    '2:00PM - 4:00PM',
+    '4:00PM - 6:00PM',
   ];
 
   // Curtain cleaning service types
   const curtainServiceTypes = [
     { id: 'dry-clean-press', name: 'Dry Cleaning and Pressing', price: 2500, description: 'Best for delicate fabrics and deep cleaning' },
     { id: 'laundry-press', name: 'Laundry and Pressing', price: 3500, description: 'Standard wash and professional pressing' },
-    { id: 'premium', name: 'Curtain Premium Service', price: 4500, description: 'Highest level of care for luxury curtains' },
+    { id: 'premium', name: 'Curtain Premium Service', price: 4500, description: 'Highest level of care for luxury curtains. Includes Curtain Removal,Pickup & Delivery and Installation' },
   ];
 
   // Curtain cleaning options
@@ -174,38 +210,30 @@ const homeCleaningTypes: Record<string, { id: string; label: string }[]> = {
   useEffect(() => {
     if (isCurtainService) {
       calculateCurtainPrice();
-    } else if (isLaundryService) {
-      calculateLaundryPrice(bookingData.laundryWeight, bookingData.laundryServices);
     } else if (isSofaCleaning) {
-      const sofaPrices: Record<number, number> = { 2: 2900, 3: 3900, 4: 4900, 5: 5900 };
-      setEstimatedPrice(sofaPrices[bookingData.sofaSeatingCapacity] || 2900);
+      setEstimatedPrice(1000 * bookingData.sofaSeatingCapacity);
     } else if (isMattressCleaning) {
-      const mattressPrices: Record<string, Record<string, number>> = {
-      'King Size': { Full: 11500, 'Top Only': 8500 },
-      'Queen Size': { Full: 10500, 'Top Only': 7500 },
-      'Double Mattress': { Full: 10000, 'Top Only': 7000 },
-      'Single Mattress': { Full: 8000, 'Top Only': 5500 },
-  };
-  const price = mattressPrices[bookingData.mattressSize]?.[bookingData.mattressCleaningType] || 0;
-  setEstimatedPrice(price * bookingData.mattressCount);
+      setEstimatedPrice(750 * bookingData.mattressCount);
     } else if (isCarpetCleaning) {
-      setEstimatedPrice(35 * bookingData.carpetSquareFeet);
+      setEstimatedPrice(500 * bookingData.carpetCount);
     } else if (isHomeCleaningService) {
       const priceMap = homeCleaningPrices[serviceId || ''];
       const pricePerSqft = priceMap?.[bookingData.cleaningType] || 0;
       setEstimatedPrice(pricePerSqft * bookingData.squareFeet);
-    } else {
+    } else if (!isLaundryService && !isDryCleaningService && !isWashingPressingService && !isPressingOnlyService) {
+      // Laundry/Dry Cleaning/Washing & Pressing/Pressing Only set their own
+      // price via DryCleaningPriceList's onTotalChange callback instead.
       setEstimatedPrice(0);
     }
-  }, [serviceId, bookingData.sofaSeatingCapacity, bookingData.mattressCount, bookingData.carpetCount, bookingData.cleaningType, bookingData.squareFeet, bookingData.mattressSize, bookingData.mattressCleaningType, bookingData.carpetSquareFeet]);
+  }, [serviceId, bookingData.sofaSeatingCapacity, bookingData.mattressCount, bookingData.carpetCount, bookingData.cleaningType, bookingData.squareFeet]);
 
-  // Set default cleaning type based on service
-useEffect(() => {
-  if (serviceId === '6') handleInputChange('cleaningType', 'general');
-  else if (serviceId === '7') handleInputChange('cleaningType', 'floor');
-  else if (serviceId === '8') handleInputChange('cleaningType', 'cut-polish');
-  else handleInputChange('cleaningType', 'normal');
-}, [serviceId]);
+  // Default cleaning type per service (single-option services only have one anyway)
+  useEffect(() => {
+    if (serviceId === '6') handleInputChange('cleaningType', 'general');
+    else if (serviceId === '7') handleInputChange('cleaningType', 'floor');
+    else if (serviceId === '8') handleInputChange('cleaningType', 'cut-polish');
+    else if (isHomeCleaningService) handleInputChange('cleaningType', 'normal');
+  }, [serviceId]);
 
   // Curtain price calculation
   const calculateCurtainPrice = () => {
@@ -232,24 +260,9 @@ useEffect(() => {
     }
   }, [bookingData.curtainServiceType, bookingData.curtainOptions, bookingData.curtainQuantity]);
 
-  // Laundry price calculation
-  const laundryServiceOptions = [
-    { id: 'wash-dry-normal', name: 'Wash & Dry - Normal', pricePerKg: 250 },
-    { id: 'wash-dry-bedsheet', name: 'Wash & Dry - Sheets', pricePerKg: 350 },
-    { id: 'wash-dry-press-normal', name: 'Wash, Dry & Press', pricePerKg: 300 },
-  ];
-
-  const calculateLaundryPrice = (weight: number, services: string[]) => {
-    let total = 0;
-    services.forEach(serviceId => {
-      const service = laundryServiceOptions.find(s => s.id === serviceId);
-      if (service) total += service.pricePerKg * weight;
-    });
-    setEstimatedPrice(total);
-  };
-
   const handleInputChange = (field: string, value: any) => {
     setBookingData(prev => ({ ...prev, [field]: value }));
+    if (field === 'date' && value) fetchSlotCounts(value);
   };
 
   const handleCurtainOptionToggle = (optionId: string) => {
@@ -261,66 +274,88 @@ useEffect(() => {
     });
   };
 
-  const handleApplyPromo = async () => {
-  if (!bookingData.promoCode.trim()) return;
-  try {
-    const data = await api.post('/offers/validate', {
-      code: bookingData.promoCode,
-      serviceId: Number(serviceId),
-      orderAmount: estimatedPrice,
-    });
-    handleInputChange('promoDiscount', data.offer.discountAmount);
-    handleInputChange('promoMessage', `✅ Code applied! You save LKR ${data.offer.discountAmount.toLocaleString()}`);
-    handleInputChange('promoApplied', true);
-  } catch (err: any) {
-    handleInputChange('promoMessage', `❌ ${err.message}`);
-    handleInputChange('promoDiscount', 0);
-    handleInputChange('promoApplied', false);
-  }
-};
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (!bookingData.date) errors.date = 'Please select a service date.';
+    if (!bookingData.time) errors.time = 'Please select a time slot.';
+    if (!isAddressComplete(bookingData.addressDetails))
+      errors.address = 'Please enter a complete address (house/street and city).';
+    if ((isLaundryService || isDryCleaningService || isWashingPressingService || isPressingOnlyService) && estimatedPrice === 0)
+      errors.items = 'Please select at least one item from the price list.';
+    if (isHomeCleaningService && bookingData.squareFeet <= 0)
+      errors.squareFeet = 'Please enter the area size in square feet.';
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
-  const handleSubmit = async (e: FormEvent) => {
-  e.preventDefault();
-  try {
-    const payload = {
-      serviceId: Number(serviceId),
-      serviceName: serviceCategoryMapping[serviceId || ''],
-      mainServiceType: mainServiceTypeMapping[serviceId || ''],
-      serviceCategory: serviceCategoryMapping[serviceId || ''],
-      date: bookingData.date,
-      time: bookingData.time,
-      address: bookingData.address,
-      totalAmount: Math.max(0, estimatedPrice - bookingData.promoDiscount),
-      promoCode: bookingData.promoCode,
-      promoDiscount: bookingData.promoDiscount,
-      packageType: bookingData.packageType,
-      frequency: bookingData.frequency,
-      specialInstructions: bookingData.specialInstructions,
-      houseSize: bookingData.houseSize,
-      rooms: bookingData.rooms,
-      bathrooms: bookingData.bathrooms,
-      laundryWeight: bookingData.laundryWeight,
-      laundryServices: bookingData.laundryServices,
-      laundryPickupDelivery: bookingData.laundryPickupDelivery,
-      laundrySelectedItems: bookingData.laundrySelectedItems,
-      curtainServiceType: bookingData.curtainServiceType,
-      curtainOptions: bookingData.curtainOptions,
-      curtainQuantity: bookingData.curtainQuantity,
-      sofaUnits: bookingData.sofaUnits,
-      sofaSeatingCapacity: bookingData.sofaSeatingCapacity,
-      mattressCount: bookingData.mattressCount,
-      carpetCount: bookingData.carpetCount,
-      cleaningType: bookingData.cleaningType, 
-      squareFeet: bookingData.squareFeet,
+  const handleApplyPromo = async () => {
+    if (!bookingData.promoCode.trim()) return;
+    setApplyingPromo(true);
+    try {
+      const data = await fetchWithAuth('/offers/validate', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: bookingData.promoCode,
+          serviceId: Number(serviceId),
+          orderAmount: estimatedPrice,
+        }),
+      });
+
+      if (data?.offer) {
+        handleInputChange('promoDiscount', data.offer.discountAmount || 0);
+        handleInputChange('promoApplied', true);
+        handleInputChange(
+          'promoMessage',
+          `✅ Code applied! You save LKR ${(data.offer.discountAmount || 0).toLocaleString()}`
+        );
+      } else {
+        handleInputChange('promoDiscount', 0);
+        handleInputChange('promoApplied', false);
+        handleInputChange('promoMessage', `❌ ${data?.message || 'Invalid promo code'}`);
+      }
+    } catch (err) {
+      handleInputChange('promoDiscount', 0);
+      handleInputChange('promoApplied', false);
+      handleInputChange('promoMessage', '❌ Failed to validate promo code. Please try again.');
+    } finally {
+      setApplyingPromo(false);
+    }
+  };
+
+  const finalPrice = Math.max(0, estimatedPrice - bookingData.promoDiscount);
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+    const serviceType = serviceMapping[serviceId || '1'] || 'home cleaning';
+    const mainServiceType = mainServiceTypeMapping[serviceId || '1'] || 'Home/Office Cleaning';
+    const serviceCategory = serviceCategoryMapping[serviceId || '1'] || 'General Cleaning';
+
+    // For curtain cleaning, determine the specific sub-service based on selected type
+    let finalServiceCategory = serviceCategory;
+    if (isCurtainService) {
+      const selectedType = curtainServiceTypes.find(t => t.id === bookingData.curtainServiceType);
+      finalServiceCategory = selectedType?.name || 'Curtain Cleaning';
+    }
+
+    const booking = {
+      ...bookingData,
+      serviceId,
+      serviceType: mainServiceType,
+      serviceCategory: finalServiceCategory,
+      serviceName: serviceType,
+      userId: user.id,
+      price: finalPrice,
+      originalPrice: estimatedPrice,
+      bookingId: 'BK-' + Date.now(),
+      status: 'pending',
+      timestamp: new Date().toISOString(),
     };
 
-    const data = await api.post('/bookings', payload);
-    alert(`Booking confirmed! Ref: ${data.booking.bookingRef}`);
-    navigate('/dashboard');
-  } catch (err: any) {
-    alert(`Booking failed: ${err.message}`);
-  }
-};
+    // Only store current booking temporarily — saved to MongoDB after payment
+    localStorage.setItem('currentBooking', JSON.stringify(booking));
+    navigate('/payment');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
@@ -333,193 +368,144 @@ useEffect(() => {
           <p className="text-gray-600 dark:text-gray-400 mb-8">Schedule your professional cleaning service today.</p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-  
             {/* Home/Office Cleaning UI */}
-{isHomeCleaningService && (
-  <div className="space-y-6">
-    <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-      <h2 className="text-2xl font-bold mb-6 dark:text-white flex items-center gap-2">
-        <Home className="w-6 h-6 text-purple-600" />
-        Cleaning Details
-      </h2>
+            {isHomeCleaningService && (
+              <div className="space-y-6">
+                <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+                  <h2 className="text-2xl font-bold mb-6 dark:text-white flex items-center gap-2">
+                    <Home className="w-6 h-6 text-purple-600" />
+                    Cleaning Details
+                  </h2>
 
-      {/* Cleaning Type Selection — only for services with multiple types */}
-      {homeCleaningTypes[serviceId || '']?.length > 1 && (
-        <div className="mb-6">
-          <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-3">
-            Cleaning Type
-          </label>
-          <div className="space-y-2">
-            {homeCleaningTypes[serviceId || '']?.map((type) => (
-              <button
-                key={type.id}
-                type="button"
-                onClick={() => handleInputChange('cleaningType', type.id)}
-                className={`w-full text-left px-5 py-4 rounded-2xl border-2 transition-all ${
-                  bookingData.cleaningType === type.id
-                    ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/10'
-                    : 'border-gray-100 dark:border-gray-700 hover:border-purple-300'
-                }`}
-              >
-                <span className="font-semibold dark:text-white">{type.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+                  {/* Cleaning Type Selection — only for services with multiple types */}
+                  {(homeCleaningTypes[serviceId || '']?.length || 0) > 1 && (
+                    <div className="mb-6">
+                      <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-3">
+                        Cleaning Type
+                      </label>
+                      <div className="space-y-2">
+                        {homeCleaningTypes[serviceId || '']?.map((type) => (
+                          <button
+                            key={type.id}
+                            type="button"
+                            onClick={() => handleInputChange('cleaningType', type.id)}
+                            className={`w-full text-left px-5 py-4 rounded-2xl border-2 transition-all ${
+                              bookingData.cleaningType === type.id
+                                ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/10'
+                                : 'border-gray-100 dark:border-gray-700 hover:border-purple-300'
+                            }`}
+                          >
+                            <span className="font-semibold dark:text-white">{type.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-      {/* Square Feet Input */}
-      <div className="mb-6">
-        <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">
-          Area Size (Square Feet)
-        </label>
-        <input
-          type="number"
-          value={bookingData.squareFeet || ''}
-          onChange={(e) => handleInputChange('squareFeet', Number(e.target.value))}
-          placeholder="Enter square feet e.g. 1500"
-          className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
-          min={1}
-        />
-        {bookingData.squareFeet > 0 && (
-          <p className="mt-2 text-purple-600 font-semibold text-sm">
-            Estimated: LKR {(
-              (homeCleaningPrices[serviceId || '']?.[bookingData.cleaningType] || 0) *
-              bookingData.squareFeet
-            ).toLocaleString()}
-            {' '}(LKR {homeCleaningPrices[serviceId || '']?.[bookingData.cleaningType] || 0}/sqft × {bookingData.squareFeet} sqft)
-          </p>
-        )}
-      </div>
+                  {/* Area Size */}
+                  <div className="mb-6">
+                    <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">
+                      Area Size (Square Feet)
+                    </label>
+                    <input
+                      type="number"
+                      value={bookingData.squareFeet || ''}
+                      onChange={(e) => handleInputChange('squareFeet', Number(e.target.value))}
+                      placeholder="Enter square feet e.g. 1500"
+                      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
+                      min={1}
+                    />
+                    {bookingData.squareFeet > 0 && (
+                      <p className="mt-2 text-purple-600 font-semibold text-sm">
+                        Estimated: LKR {(
+                          (homeCleaningPrices[serviceId || '']?.[bookingData.cleaningType] || 0) *
+                          bookingData.squareFeet
+                        ).toLocaleString()}
+                        {' '}(LKR {homeCleaningPrices[serviceId || '']?.[bookingData.cleaningType] || 0}/sqft × {bookingData.squareFeet} sqft)
+                      </p>
+                    )}
+                  </div>
 
-      {/* Frequency — only for regular cleaning services */}
-      {['1', '6'].includes(serviceId || '') && (
-        <div>
-          <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">
-            Cleaning Frequency
-          </label>
-          <select
-            value={bookingData.frequency}
-            onChange={(e) => handleInputChange('frequency', e.target.value)}
-            className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
-          >
-            <option value="once">One Time</option>
-            <option value="weekly">Weekly</option>
-            <option value="biweekly">Bi-Weekly</option>
-            <option value="monthly">Monthly</option>
-          </select>
-        </div>
-      )}
-    </div>
+                  {/* Frequency — only for regular cleaning services */}
+                  {['1', '6'].includes(serviceId || '') && (
+                    <div>
+                      <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Cleaning Frequency</label>
+                      <select
+                        value={bookingData.frequency}
+                        onChange={(e) => handleInputChange('frequency', e.target.value)}
+                        className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
+                      >
+                        <option value="once">One Time</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="biweekly">Bi-Weekly</option>
+                        <option value="monthly">Monthly</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
 
-    {/* Schedule & Address */}
-    <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-      <h2 className="text-2xl font-bold mb-6 dark:text-white flex items-center gap-2">
-        <Calendar className="w-6 h-6 text-purple-600" />
-        Schedule & Address
-      </h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div>
-          <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Service Date</label>
-          <DatePicker
-            selected={bookingData.date ? new Date(bookingData.date) : null}
-            onChange={(date) => handleInputChange('date', date ? date.toISOString().split('T')[0] : '')}
-            minDate={new Date()}
-            className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
-            placeholderText="Select date"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Preferred Time</label>
-          <select
-            value={bookingData.time}
-            onChange={(e) => handleInputChange('time', e.target.value)}
-            className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
-          >
-            <option value="">Choose slot</option>
-            {timeSlots.map(slot => <option key={slot} value={slot}>{slot}</option>)}
-          </select>
-        </div>
-      </div>
-      <div>
-        <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Full Address</label>
-        <textarea
-          value={bookingData.address}
-          onChange={(e) => handleInputChange('address', e.target.value)}
-          rows={3}
-          className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white resize-none"
-          placeholder="Enter full address..."
-        />
-      </div>
-    </div>
-  </div>
-)}
+                <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+                  <h2 className="text-2xl font-bold mb-6 dark:text-white flex items-center gap-2">
+                    <Calendar className="w-6 h-6 text-purple-600" />
+                    Schedule & Address
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                      <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Service Date</label>
+                      <DatePicker
+                        selected={bookingData.date ? parseLocalDate(bookingData.date) : null}
+                        onChange={(date: Date | null) => handleInputChange('date', date ? toLocalDateStr(date) : '')}
+                        minDate={new Date()}
+                        className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
+                        placeholderText="Select date"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Preferred Time</label>
+                      <select
+                        value={bookingData.time}
+                        onChange={(e) => handleInputChange('time', e.target.value)}
+                        className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
+                      >
+                        <option value="">Choose slot</option>
+                        {timeSlots.map(slot => {
+                          const isFull = (slotCounts[slot] || 0) >= 3;
+                          return (
+                            <option key={slot} value={slot} disabled={isFull}>
+                              {slot}{isFull ? ' — Full' : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  </div>
+                  <AddressInput
+                    value={bookingData.addressDetails}
+                    onChange={(details, flat) => {
+                      handleInputChange('addressDetails', details);
+                      handleInputChange('address', flat);
+                    }}
+                    label="Full Address"
+                    error={formErrors.address}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Laundry Service UI */}
             {isLaundryService && (
               <div className="space-y-6">
                 <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-                  <h2 className="text-2xl font-bold mb-6 dark:text-white flex items-center gap-2">
-                    <Shirt className="w-6 h-6 text-purple-600" />
-                    Laundry Details
-                  </h2>
-                  <div className="space-y-6">
-                    <div>
-                      <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Estimated Weight (kg)</label>
-                      <div className="flex items-center gap-4">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newWeight = Math.max(1, bookingData.laundryWeight - 1);
-                            handleInputChange('laundryWeight', newWeight);
-                            calculateLaundryPrice(newWeight, bookingData.laundryServices);
-                          }}
-                          className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center hover:bg-purple-600 hover:text-white transition-all"
-                        >
-                          <Minus className="w-5 h-5" />
-                        </button>
-                        <span className="text-3xl font-bold w-16 text-center dark:text-white">{bookingData.laundryWeight} kg</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newWeight = bookingData.laundryWeight + 1;
-                            handleInputChange('laundryWeight', newWeight);
-                            calculateLaundryPrice(newWeight, bookingData.laundryServices);
-                          }}
-                          className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center hover:bg-purple-600 hover:text-white transition-all"
-                        >
-                          <Plus className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-4">Select Services</label>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {laundryServiceOptions.map((opt) => (
-                          <button
-                            key={opt.id}
-                            type="button"
-                            onClick={() => {
-                              const newServices = bookingData.laundryServices.includes(opt.id)
-                                ? bookingData.laundryServices.filter(s => s !== opt.id)
-                                : [...bookingData.laundryServices, opt.id];
-                              handleInputChange('laundryServices', newServices);
-                              calculateLaundryPrice(bookingData.laundryWeight, newServices);
-                            }}
-                            className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
-                              bookingData.laundryServices.includes(opt.id)
-                                ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/10'
-                                : 'border-gray-100 dark:border-gray-700 hover:border-purple-200'
-                            }`}
-                          >
-                            <span className="font-bold text-sm dark:text-white">{opt.name}</span>
-                            <span className="text-xs text-purple-600 font-bold">LKR {opt.pricePerKg}/kg</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+                  <DryCleaningPriceList
+                    serviceId={2}
+                    title="LAUNDRY PRICE LIST"
+                    subtitle="Select garments and specify quantities for your laundry service"
+                    onTotalChange={(total, items) => {
+                      setEstimatedPrice(total);
+                      handleInputChange('laundrySelectedItems', items);
+                    }}
+                    theme={theme}
+                  />
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">
@@ -531,8 +517,8 @@ useEffect(() => {
                     <div>
                       <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup Date</label>
                       <DatePicker
-                        selected={bookingData.date ? new Date(bookingData.date) : null}
-                        onChange={(date) => handleInputChange('date', date ? date.toISOString().split('T')[0] : '')}
+                        selected={bookingData.date ? parseLocalDate(bookingData.date) : null}
+                        onChange={(date: Date | null) => handleInputChange('date', date ? toLocalDateStr(date) : '')}
                         minDate={new Date()}
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                         placeholderText="Select date"
@@ -546,20 +532,26 @@ useEffect(() => {
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                       >
                         <option value="">Choose slot</option>
-                        {timeSlots.map(slot => <option key={slot} value={slot}>{slot}</option>)}
+                        {timeSlots.map(slot => {
+                          const isFull = (slotCounts[slot] || 0) >= 3;
+                          return (
+                            <option key={slot} value={slot} disabled={isFull}>
+                              {slot}{isFull ? ' — Full' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup & Delivery Address</label>
-                    <textarea
-                      value={bookingData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      rows={3}
-                      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white resize-none"
-                      placeholder="Enter full address for pickup..."
-                    />
-                  </div>
+                  <AddressInput
+                    value={bookingData.addressDetails}
+                    onChange={(details, flat) => {
+                      handleInputChange('addressDetails', details);
+                      handleInputChange('address', flat);
+                    }}
+                    label="Pickup & Delivery Address"
+                    error={formErrors.address}
+                  />
                 </div>
               </div>
             )}
@@ -616,8 +608,8 @@ useEffect(() => {
                     <div>
                       <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup Date</label>
                       <DatePicker
-                        selected={bookingData.date ? new Date(bookingData.date) : null}
-                        onChange={(date) => handleInputChange('date', date ? date.toISOString().split('T')[0] : '')}
+                        selected={bookingData.date ? parseLocalDate(bookingData.date) : null}
+                        onChange={(date: Date | null) => handleInputChange('date', date ? toLocalDateStr(date) : '')}
                         minDate={new Date()}
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                         placeholderText="Select date"
@@ -631,20 +623,26 @@ useEffect(() => {
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                       >
                         <option value="">Choose slot</option>
-                        {timeSlots.map(slot => <option key={slot} value={slot}>{slot}</option>)}
+                        {timeSlots.map(slot => {
+                          const isFull = (slotCounts[slot] || 0) >= 3;
+                          return (
+                            <option key={slot} value={slot} disabled={isFull}>
+                              {slot}{isFull ? ' — Full' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup & Delivery Address</label>
-                    <textarea
-                      value={bookingData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      rows={3}
-                      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white resize-none"
-                      placeholder="Enter full address for pickup and delivery..."
-                    />
-                  </div>
+                  <AddressInput
+                    value={bookingData.addressDetails}
+                    onChange={(details, flat) => {
+                      handleInputChange('addressDetails', details);
+                      handleInputChange('address', flat);
+                    }}
+                    label="Pickup & Delivery Address"
+                    error={formErrors.address}
+                  />
                 </div>
               </div>
             )}
@@ -701,8 +699,8 @@ useEffect(() => {
                     <div>
                       <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup Date</label>
                       <DatePicker
-                        selected={bookingData.date ? new Date(bookingData.date) : null}
-                        onChange={(date) => handleInputChange('date', date ? date.toISOString().split('T')[0] : '')}
+                        selected={bookingData.date ? parseLocalDate(bookingData.date) : null}
+                        onChange={(date: Date | null) => handleInputChange('date', date ? toLocalDateStr(date) : '')}
                         minDate={new Date()}
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                         placeholderText="Select date"
@@ -716,20 +714,26 @@ useEffect(() => {
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                       >
                         <option value="">Choose slot</option>
-                        {timeSlots.map(slot => <option key={slot} value={slot}>{slot}</option>)}
+                        {timeSlots.map(slot => {
+                          const isFull = (slotCounts[slot] || 0) >= 3;
+                          return (
+                            <option key={slot} value={slot} disabled={isFull}>
+                              {slot}{isFull ? ' — Full' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup & Delivery Address</label>
-                    <textarea
-                      value={bookingData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      rows={3}
-                      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white resize-none"
-                      placeholder="Enter full address for pickup and delivery..."
-                    />
-                  </div>
+                  <AddressInput
+                    value={bookingData.addressDetails}
+                    onChange={(details, flat) => {
+                      handleInputChange('addressDetails', details);
+                      handleInputChange('address', flat);
+                    }}
+                    label="Pickup & Delivery Address"
+                    error={formErrors.address}
+                  />
                 </div>
               </div>
             )}
@@ -786,8 +790,8 @@ useEffect(() => {
                     <div>
                       <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup Date</label>
                       <DatePicker
-                        selected={bookingData.date ? new Date(bookingData.date) : null}
-                        onChange={(date) => handleInputChange('date', date ? date.toISOString().split('T')[0] : '')}
+                        selected={bookingData.date ? parseLocalDate(bookingData.date) : null}
+                        onChange={(date: Date | null) => handleInputChange('date', date ? toLocalDateStr(date) : '')}
                         minDate={new Date()}
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                         placeholderText="Select date"
@@ -801,20 +805,26 @@ useEffect(() => {
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                       >
                         <option value="">Choose slot</option>
-                        {timeSlots.map(slot => <option key={slot} value={slot}>{slot}</option>)}
+                        {timeSlots.map(slot => {
+                          const isFull = (slotCounts[slot] || 0) >= 3;
+                          return (
+                            <option key={slot} value={slot} disabled={isFull}>
+                              {slot}{isFull ? ' — Full' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup & Delivery Address</label>
-                    <textarea
-                      value={bookingData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      rows={3}
-                      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white resize-none"
-                      placeholder="Enter full address for pickup and delivery..."
-                    />
-                  </div>
+                  <AddressInput
+                    value={bookingData.addressDetails}
+                    onChange={(details, flat) => {
+                      handleInputChange('addressDetails', details);
+                      handleInputChange('address', flat);
+                    }}
+                    label="Pickup & Delivery Address"
+                    error={formErrors.address}
+                  />
                 </div>
               </div>
             )}
@@ -828,140 +838,83 @@ useEffect(() => {
                     Property Details
                   </h2>
                   
-                   {isSofaCleaning && (
-  <div className="space-y-4">
-    <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">
-      Number of Seats
-    </label>
-    <div className="grid grid-cols-4 gap-3">
-      {[2, 3, 4, 5].map(seat => (
-        <button
-          key={seat}
-          type="button"
-          onClick={() => handleInputChange('sofaSeatingCapacity', seat)}
-          className={`py-4 rounded-2xl border-2 font-bold text-lg transition-all ${
-            bookingData.sofaSeatingCapacity === seat
-              ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/10 text-purple-700'
-              : 'border-gray-100 dark:border-gray-700 hover:border-purple-300 dark:text-white'
-          }`}
-        >
-          {seat}
-        </button>
-      ))}
-    </div>
-    <p className="text-purple-600 font-semibold text-sm">
-      Price: LKR {{ 2: 2900, 3: 3900, 4: 4900, 5: 5900 }[bookingData.sofaSeatingCapacity]?.toLocaleString()}
-    </p>
-  </div>
-)}
+                  {isSofaCleaning && (
+                    <div className="space-y-4">
+                      <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
+                        Number of people that can be seated on the sofa
+                      </label>
+                      <div className="flex items-center gap-4">
+                        <button
+                          type="button"
+                          onClick={() => handleInputChange('sofaSeatingCapacity', Math.max(1, bookingData.sofaSeatingCapacity - 1))}
+                          className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center hover:bg-purple-600 hover:text-white transition-all"
+                        >
+                          <Minus className="w-5 h-5" />
+                        </button>
+                        <span className="text-3xl font-bold w-12 text-center dark:text-white">{bookingData.sofaSeatingCapacity}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleInputChange('sofaSeatingCapacity', bookingData.sofaSeatingCapacity + 1)}
+                          className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center hover:bg-purple-600 hover:text-white transition-all"
+                        >
+                          <Plus className="w-5 h-5" />
+                        </button>
+                        <span className="text-gray-500 ml-2">(LKR 1,000 per person)</span>
+                      </div>
+                    </div>
+                  )}
 
-  {isMattressCleaning && (
-  <div className="space-y-6">
-    <div>
-      <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-3">
-        Mattress Size
-      </label>
-      <div className="grid grid-cols-2 gap-3">
-        {['King Size', 'Queen Size', 'Double Mattress', 'Single Mattress'].map(size => (
-          <button
-            key={size}
-            type="button"
-            onClick={() => handleInputChange('mattressSize', size)}
-            className={`py-3 px-4 rounded-2xl border-2 font-medium text-sm transition-all ${
-              bookingData.mattressSize === size
-                ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/10 text-purple-700'
-                : 'border-gray-100 dark:border-gray-700 hover:border-purple-300 dark:text-white'
-            }`}
-          >
-            {size}
-          </button>
-        ))}
-      </div>
-    </div>
+                  {isMattressCleaning && (
+                    <div className="space-y-4">
+                      <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
+                        Number of mattresses
+                      </label>
+                      <div className="flex items-center gap-4">
+                        <button
+                          type="button"
+                          onClick={() => handleInputChange('mattressCount', Math.max(1, bookingData.mattressCount - 1))}
+                          className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center hover:bg-purple-600 hover:text-white transition-all"
+                        >
+                          <Minus className="w-5 h-5" />
+                        </button>
+                        <span className="text-3xl font-bold w-12 text-center dark:text-white">{bookingData.mattressCount}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleInputChange('mattressCount', bookingData.mattressCount + 1)}
+                          className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center hover:bg-purple-600 hover:text-white transition-all"
+                        >
+                          <Plus className="w-5 h-5" />
+                        </button>
+                        <span className="text-gray-500 ml-2">(LKR 750 per mattress)</span>
+                      </div>
+                    </div>
+                  )}
 
-    <div>
-      <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-3">
-        Cleaning Type
-      </label>
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          { id: 'Full', label: 'Full Mattress' },
-          { id: 'Top Only', label: 'Top Only' },
-        ].map(type => (
-          <button
-            key={type.id}
-            type="button"
-            onClick={() => handleInputChange('mattressCleaningType', type.id)}
-            className={`py-3 px-4 rounded-2xl border-2 font-medium text-sm transition-all ${
-              bookingData.mattressCleaningType === type.id
-                ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/10 text-purple-700'
-                : 'border-gray-100 dark:border-gray-700 hover:border-purple-300 dark:text-white'
-            }`}
-          >
-            {type.label}
-          </button>
-        ))}
-      </div>
-    </div>
-
-    <div>
-      <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">
-        Number of Mattresses
-      </label>
-      <div className="flex items-center gap-4">
-        <button type="button"
-          onClick={() => handleInputChange('mattressCount', Math.max(1, bookingData.mattressCount - 1))}
-          className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center hover:bg-purple-600 hover:text-white transition-all">
-          <Minus className="w-5 h-5" />
-        </button>
-        <span className="text-3xl font-bold w-12 text-center dark:text-white">{bookingData.mattressCount}</span>
-        <button type="button"
-          onClick={() => handleInputChange('mattressCount', bookingData.mattressCount + 1)}
-          className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center hover:bg-purple-600 hover:text-white transition-all">
-          <Plus className="w-5 h-5" />
-        </button>
-      </div>
-    </div>
-
-    {bookingData.mattressSize && bookingData.mattressCleaningType && (
-      <p className="text-purple-600 font-semibold text-sm">
-        Price per mattress: LKR {({
-          'King Size': { Full: 11500, 'Top Only': 8500 },
-          'Queen Size': { Full: 10500, 'Top Only': 7500 },
-          'Double Mattress': { Full: 10000, 'Top Only': 7000 },
-          'Single Mattress': { Full: 8000, 'Top Only': 5500 },
-        } as any)[bookingData.mattressSize]?.[bookingData.mattressCleaningType]?.toLocaleString()}
-        {bookingData.mattressCount > 1 && ` × ${bookingData.mattressCount} = LKR ${(({
-          'King Size': { Full: 11500, 'Top Only': 8500 },
-          'Queen Size': { Full: 10500, 'Top Only': 7500 },
-          'Double Mattress': { Full: 10000, 'Top Only': 7000 },
-          'Single Mattress': { Full: 8000, 'Top Only': 5500 },
-        } as any)[bookingData.mattressSize]?.[bookingData.mattressCleaningType] * bookingData.mattressCount)?.toLocaleString()}`}
-      </p>
-    )}
-  </div>
-)}
-
-    {isCarpetCleaning && (
-  <div className="space-y-4">
-    <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">
-      Carpet Area (Square Feet)
-    </label>
-    <input
-      type="number"
-      value={bookingData.carpetSquareFeet || ''}
-      onChange={(e) => handleInputChange('carpetSquareFeet', Number(e.target.value))}
-      placeholder="Enter carpet area in square feet"
-      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
-      min={1}
-    />
-    {bookingData.carpetSquareFeet > 0 && (
-      <p className="text-purple-600 font-semibold text-sm">
-        Estimated: LKR {(35 * bookingData.carpetSquareFeet).toLocaleString()} (LKR 35/sqft × {bookingData.carpetSquareFeet} sqft)
-      </p>
-    )}
-  </div>
-)}
+                  {isCarpetCleaning && (
+                    <div className="space-y-4">
+                      <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
+                        Number of carpets
+                      </label>
+                      <div className="flex items-center gap-4">
+                        <button
+                          type="button"
+                          onClick={() => handleInputChange('carpetCount', Math.max(1, bookingData.carpetCount - 1))}
+                          className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center hover:bg-purple-600 hover:text-white transition-all"
+                        >
+                          <Minus className="w-5 h-5" />
+                        </button>
+                        <span className="text-3xl font-bold w-12 text-center dark:text-white">{bookingData.carpetCount}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleInputChange('carpetCount', bookingData.carpetCount + 1)}
+                          className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center hover:bg-purple-600 hover:text-white transition-all"
+                        >
+                          <Plus className="w-5 h-5" />
+                        </button>
+                        <span className="text-gray-500 ml-2">(LKR 500 per carpet)</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">
@@ -973,8 +926,8 @@ useEffect(() => {
                     <div>
                       <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Service Date</label>
                       <DatePicker
-                        selected={bookingData.date ? new Date(bookingData.date) : null}
-                        onChange={(date) => handleInputChange('date', date ? date.toISOString().split('T')[0] : '')}
+                        selected={bookingData.date ? parseLocalDate(bookingData.date) : null}
+                        onChange={(date: Date | null) => handleInputChange('date', date ? toLocalDateStr(date) : '')}
                         minDate={new Date()}
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                         placeholderText="Select date"
@@ -988,20 +941,26 @@ useEffect(() => {
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                       >
                         <option value="">Choose slot</option>
-                        {timeSlots.map(slot => <option key={slot} value={slot}>{slot}</option>)}
+                        {timeSlots.map(slot => {
+                          const isFull = (slotCounts[slot] || 0) >= 3;
+                          return (
+                            <option key={slot} value={slot} disabled={isFull}>
+                              {slot}{isFull ? ' — Full' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Service Address</label>
-                    <textarea
-                      value={bookingData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      rows={3}
-                      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white resize-none"
-                      placeholder="Enter the address where cleaning is required..."
-                    />
-                  </div>
+                  <AddressInput
+                    value={bookingData.addressDetails}
+                    onChange={(details, flat) => {
+                      handleInputChange('addressDetails', details);
+                      handleInputChange('address', flat);
+                    }}
+                    label="Service Address"
+                    error={formErrors.address}
+                  />
                 </div>
               </div>
             )}
@@ -1111,8 +1070,8 @@ useEffect(() => {
                     <div>
                       <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Service Date</label>
                       <DatePicker
-                        selected={bookingData.date ? new Date(bookingData.date) : null}
-                        onChange={(date) => handleInputChange('date', date ? date.toISOString().split('T')[0] : '')}
+                        selected={bookingData.date ? parseLocalDate(bookingData.date) : null}
+                        onChange={(date: Date | null) => handleInputChange('date', date ? toLocalDateStr(date) : '')}
                         minDate={new Date()}
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                         placeholderText="Select date"
@@ -1126,90 +1085,99 @@ useEffect(() => {
                         className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white"
                       >
                         <option value="">Choose slot</option>
-                        {timeSlots.map(slot => <option key={slot} value={slot}>{slot}</option>)}
+                        {timeSlots.map(slot => {
+                          const isFull = (slotCounts[slot] || 0) >= 3;
+                          return (
+                            <option key={slot} value={slot} disabled={isFull}>
+                              {slot}{isFull ? ' — Full' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-black uppercase text-gray-400 tracking-widest mb-2">Pickup Address</label>
-                    <textarea
-                      value={bookingData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      rows={3}
-                      className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white resize-none"
-                      placeholder="Enter full address for pickup and delivery..."
-                    />
-                  </div>
+                  <AddressInput
+                    value={bookingData.addressDetails}
+                    onChange={(details, flat) => {
+                      handleInputChange('addressDetails', details);
+                      handleInputChange('address', flat);
+                    }}
+                    label="Pickup Address"
+                    error={formErrors.address}
+                  />
                 </div>
               </div>
             )}
 
-            {/* Price Summary & Submit */}
-            {/* Promo Code Section */}
-<div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">
-  <h2 className="text-xl font-bold mb-4 dark:text-white">Have a Promo Code?</h2>
-  <div className="flex gap-3">
-    <input
-      type="text"
-      value={bookingData.promoCode}
-      onChange={(e) => {
-        handleInputChange('promoCode', e.target.value.toUpperCase());
-        handleInputChange('promoApplied', false);
-        handleInputChange('promoDiscount', 0);
-        handleInputChange('promoMessage', '');
-      }}
-      placeholder="Enter promo code e.g. WELCOME20"
-      className="flex-1 px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white uppercase"
-    />
-    <button
-      type="button"
-      onClick={handleApplyPromo}
-      disabled={!bookingData.promoCode.trim() || bookingData.promoApplied}
-      className="px-6 py-4 bg-purple-600 text-white rounded-2xl font-bold hover:bg-purple-700 transition-colors disabled:bg-purple-300"
-    >
-      {bookingData.promoApplied ? '✅ Applied' : 'Apply'}
-    </button>
-  </div>
-  {bookingData.promoMessage && (
-    <p className={`mt-2 text-sm font-medium ${bookingData.promoApplied ? 'text-green-600' : 'text-red-500'}`}>
-      {bookingData.promoMessage}
-    </p>
-  )}
-</div>
+            {/* Promo Code */}
+            <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+              <h2 className="text-xl font-bold mb-4 dark:text-white">Have a Promo Code?</h2>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  value={bookingData.promoCode}
+                  onChange={(e) => handleInputChange('promoCode', e.target.value.toUpperCase())}
+                  placeholder="Enter promo code e.g. WELCOME20"
+                  className="flex-1 px-5 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white uppercase tracking-wide"
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyPromo}
+                  disabled={applyingPromo || !bookingData.promoCode.trim()}
+                  className="px-8 py-4 bg-purple-600 text-white rounded-2xl font-bold hover:bg-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {applyingPromo ? 'Checking...' : 'Apply'}
+                </button>
+              </div>
+              {bookingData.promoMessage && (
+                <p className={`mt-3 text-sm font-medium ${bookingData.promoApplied ? 'text-green-600' : 'text-red-600'}`}>
+                  {bookingData.promoMessage}
+                </p>
+              )}
+            </div>
 
-{/* Price Summary & Submit */}
-<div className="bg-gray-900 dark:bg-purple-900 rounded-3xl p-8 text-white shadow-xl">
-  <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-    <div className="space-y-1">
-      <h3 className="text-purple-300 font-bold uppercase tracking-widest text-xs mb-1">Price Summary</h3>
-      <div className="flex items-baseline gap-2">
-        <span className="text-2xl text-purple-300">Original:</span>
-        <span className="text-2xl font-bold">LKR {estimatedPrice.toLocaleString()}</span>
-      </div>
-      {bookingData.promoDiscount > 0 && (
-        <div className="flex items-baseline gap-2">
-          <span className="text-lg text-green-400">Discount:</span>
-          <span className="text-lg font-bold text-green-400">
-            - LKR {bookingData.promoDiscount.toLocaleString()}
-          </span>
-        </div>
-      )}
-      <div className="flex items-baseline gap-2 border-t border-white/20 pt-2 mt-2">
-        <span className="text-purple-300 font-bold uppercase tracking-widest text-xs">Final Total:</span>
-        <span className="text-4xl font-black">
-          LKR {Math.max(0, estimatedPrice - bookingData.promoDiscount).toLocaleString()}
-        </span>
-        <span className="text-purple-400 text-sm">inc. taxes</span>
-      </div>
-    </div>
-    <button
-      type="submit"
-      className="w-full md:w-auto px-10 py-5 bg-white text-purple-900 rounded-2xl font-black text-lg hover:bg-purple-50 transition-all shadow-lg active:scale-95"
-    >
-      Proceed to Payment
-    </button>
-  </div>
-</div>
+            {/* Price Summary & Submit */}
+            <div className="bg-gray-900 dark:bg-purple-900 rounded-3xl p-8 text-white shadow-xl">
+              {Object.keys(formErrors).length > 0 && (
+                <div className="mb-6 p-4 bg-red-900/40 border border-red-500 rounded-2xl">
+                  <p className="text-red-300 font-bold text-sm mb-2">Please fill in all required fields:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    {Object.values(formErrors).map((err, i) => (
+                      <li key={i} className="text-red-300 text-sm">{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                <div>
+                  <h3 className="text-purple-300 font-bold uppercase tracking-widest text-xs mb-1">
+                    {bookingData.promoApplied ? 'Price Summary' : 'Estimated Total'}
+                  </h3>
+                  {bookingData.promoApplied ? (
+                    <>
+                      <div className="text-purple-300 text-sm">
+                        Original: <span className="line-through">LKR {estimatedPrice.toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-4xl font-black">LKR {finalPrice.toLocaleString()}</span>
+                        <span className="text-purple-400 text-sm">inc. taxes</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-4xl font-black">LKR {estimatedPrice.toLocaleString()}</span>
+                      <span className="text-purple-400 text-sm">inc. taxes</span>
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="submit"
+                  className="w-full md:w-auto px-10 py-5 bg-white text-purple-900 rounded-2xl font-black text-lg hover:bg-purple-50 transition-all shadow-lg active:scale-95"
+                >
+                  Proceed to Payment
+                </button>
+              </div>
+            </div>
           </form>
         </div>
       </div>

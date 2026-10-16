@@ -16,9 +16,18 @@ interface SelectedItem extends GarmentItem {
 interface DryCleaningPriceListProps {
   onTotalChange: (total: number, items: SelectedItem[]) => void;
   theme?: 'light' | 'dark';
+  serviceId?: number;
+  title?: string;
+  subtitle?: string;
 }
 
-export default function DryCleaningPriceList({ onTotalChange, theme = 'light' }: DryCleaningPriceListProps) {
+export default function DryCleaningPriceList({
+  onTotalChange,
+  theme = 'light',
+  serviceId = 9,
+  title = 'DRY CLEANING PRICE LIST',
+  subtitle = 'Select garments and specify quantities for your dry cleaning service',
+}: DryCleaningPriceListProps) {
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
   const [garments, setGarments] = useState<GarmentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,7 +35,7 @@ export default function DryCleaningPriceList({ onTotalChange, theme = 'light' }:
   useEffect(() => {
     const fetchPrices = async () => {
       try {
-        const data = await api.get('/pricelists/9');
+        const data = await api.get(`/pricelists/${serviceId}`);
         const groups = data.priceList.pricing.groups;
         const items: GarmentItem[] = [];
         groups.forEach((group: any) => {
@@ -41,13 +50,13 @@ export default function DryCleaningPriceList({ onTotalChange, theme = 'light' }:
         });
         setGarments(items);
       } catch (err) {
-        console.error('Failed to load dry cleaning prices', err);
+        console.error('Failed to load garment prices', err);
       } finally {
         setLoading(false);
       }
     };
     fetchPrices();
-  }, []);
+  }, [serviceId]);
 
   const handleAddItem = (garment: GarmentItem) => {
     const existingItem = selectedItems.find(item => item.id === garment.id);
@@ -118,8 +127,8 @@ export default function DryCleaningPriceList({ onTotalChange, theme = 'light' }:
   return (
     <div className="space-y-8">
       <div className="bg-purple-600 dark:bg-purple-700 text-white rounded-lg p-6">
-        <h2 className="text-3xl mb-2 font-bold">DRY CLEANING PRICE LIST</h2>
-        <p className="text-purple-100">Select garments and specify quantities for your dry cleaning service</p>
+        <h2 className="text-3xl mb-2 font-bold">{title}</h2>
+        <p className="text-purple-100">{subtitle}</p>
       </div>
 
       {Object.entries(groupedGarments).map(([category, items]) => (
