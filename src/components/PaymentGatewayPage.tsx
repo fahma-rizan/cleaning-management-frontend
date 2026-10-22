@@ -92,8 +92,8 @@ const PaymentGatewayPage = ({ user }: PaymentGatewayPageProps) => {
         // it threw a SecurityError instead of opening a fresh blank window.
         // A unique name per attempt guarantees window.open() always hands back
         // a brand-new (same-origin, about:blank) popup.
-        const popup = window.open('', `payhere_checkout_${checkoutRef}`, 'width=720,height=800');
-        let targetDoc: Document;
+        const popup = null;
+        let targetDoc: Document = document;
         let submitInCurrentWindow: boolean;
         try {
           submitInCurrentWindow = !popup || popup.closed;

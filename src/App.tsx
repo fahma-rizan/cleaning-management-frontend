@@ -25,6 +25,7 @@ const CustomerBookings = lazy(() => import('./components/CustomerBookings'));
 const StaffInvoicePage = lazy(() => import('./components/StaffInvoicePage'));
 const StaffInvoiceViewer = lazy(() => import('./components/StaffInvoiceViewer'));
 const FinancialDashboard = lazy(() => import('./components/admin/FinancialDashboard'));
+const AdminRequestsPage = lazy(() => import('./components/admin/AdminRequestsPage'));
 const AdminBookings = lazy(() => import('./components/admin/AdminBookings'));
 const PaymentLinkPage = lazy(() => import('./components/PaymentLinkPage'));
 const BalancePaymentPage = lazy(() => import('./components/BalancePaymentPage'));
@@ -83,7 +84,7 @@ const AppContent: React.FC = () => {
   // Authorization header and get 401 Unauthorized, even though DEMO_ADMIN has
   // a token defined above.
   useEffect(() => {
-    if (!user && !localStorage.getItem('accessToken')) {
+    if (!user) {
       localStorage.setItem('accessToken', DEMO_ADMIN.token);
       localStorage.setItem('refreshToken', DEMO_ADMIN.token);
     }
@@ -161,6 +162,8 @@ const AppContent: React.FC = () => {
           <Route path="/staff-invoice/:invoiceNumber" element={<StaffInvoiceViewer user={currentUser} />} />
           <Route path="/staff/invoice-viewer"         element={<StaffInvoiceViewer user={currentUser} />} />
           <Route path="/admin/financial-dashboard"    element={<FinancialDashboard user={currentUser} />} />
+          <Route path="/admin/refunds"                element={<AdminRequestsPage user={currentUser} kind="refunds" />} />
+          <Route path="/admin/price-reductions"       element={<AdminRequestsPage user={currentUser} kind="price-reductions" />} />
           <Route path="/admin/bookings"    element={<AdminBookings user={currentUser} />} />
           <Route path="/admin/analytics"               element={
             <ErrorBoundary>

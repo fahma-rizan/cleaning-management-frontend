@@ -82,6 +82,7 @@ const NAV_ITEMS: NavItem[] = [
     id:    'invoices',
     label: 'Invoices',
     icon:  FileText,
+    path:  '/admin/financial-dashboard?tab=invoices',
     subItems: [
       { id: 'create-invoice',  label: 'Create Invoice',  icon: FileText,   path: '/staff-invoice/new' },
       { id: 'ai-invoice',      label: 'AI Invoice',      icon: Sparkles,   path: '/ai-invoice' },
@@ -99,13 +100,8 @@ const NAV_ITEMS: NavItem[] = [
       // cancelled (customer or admin), so this link now goes straight to
       // the Financial Dashboard's own Refunds & Credit Notes tab, where
       // those auto-created refunds are actually reviewed/approved.
-      { id: 'refunds',          label: 'Refunds',         icon: RefreshCw,  path: '/admin/financial-dashboard?tab=refunds' },
-      { id: 'price-reductions', label: 'Price Reductions',icon: Tag,        path: '/price-reduction' },
-      { id: 'payment-link',     label: 'Payment Links',   icon: CreditCard, path: '/payment-link' },
-      // Added per request — Payment Report belongs with Payments, not just
-      // tucked under Invoices (still left there too, so nothing that
-      // already links to it under Invoices breaks).
-      { id: 'payment-report-2', label: 'Payment Report',  icon: BarChart3,  path: '/payment-report' },
+      { id: 'refunds',          label: 'Refunds',         icon: RefreshCw,  path: '/admin/refunds' },
+      { id: 'price-reductions', label: 'Price Reductions',icon: Tag,        path: '/admin/price-reductions' },
     ],
   },
   {
@@ -163,16 +159,34 @@ const NAV_ITEMS: NavItem[] = [
 export default function AdminSidebar({ user, onLogout }: AdminSidebarProps) {
   const navigate  = useNavigate();
   const location  = useLocation();
-  // NEW — strips any query string before comparing against location.pathname
-  // (which never contains one). Needed now that the "Refunds" link below
-  // points at '/admin/financial-dashboard?tab=refunds' instead of a bare
-  // path — without this, that link's path would never match pathname and
-  // the Payments group/highlight would silently stop auto-expanding.
   const pathOnly = (p: string) => p.split('?')[0];
+  const queryOnly = (p: string) => p.includes('?') ? p.slice(p.indexOf('?')) : '';
+  const matchesPath = (path?: string): boolean => {
+    if (!path) return false;
+    const dashboardTab =
+      path === '/admin/refunds' ? '?tab=refunds' :
+      path === '/admin/price-reductions' ? '?tab=price-reductions' :
+      null;
+    if (dashboardTab) {
+      return location.pathname === '/admin/financial-dashboard' && location.search === dashboardTab;
+    }
+    const base = pathOnly(path);
+    const query = queryOnly(path);
+    if (location.pathname !== base && !location.pathname.startsWith(base + '/')) {
+      return false;
+    }
+    return !query || location.search === query;
+  };
+
   const [expandedId, setExpandedId] = useState<string | null>(() => {
     // Auto-expand the group whose child matches the current path
     for (const item of NAV_ITEMS) {
-      if (item.subItems?.some(s => location.pathname.startsWith(pathOnly(s.path)))) {
+      if (item.subItems?.some(s => {
+        if (matchesPath(s.path)) return true;
+        const base = pathOnly(s.path);
+        const query = queryOnly(s.path);
+        return location.pathname.startsWith(base) && (!query || location.search === query);
+      })) {
         return item.id;
       }
     }
@@ -180,14 +194,13 @@ export default function AdminSidebar({ user, onLogout }: AdminSidebarProps) {
   });
 
   const isActive = (path?: string): boolean => {
-    if (!path) return false;
-    const base = pathOnly(path);
-    return location.pathname === base || location.pathname.startsWith(base + '/');
+    return matchesPath(path);
   };
 
   const handleNav = (item: NavItem) => {
     if (item.subItems) {
       setExpandedId(expandedId === item.id ? null : item.id);
+      if (item.path) navigate(item.path);
     } else if (item.path) {
       navigate(item.path);
     }

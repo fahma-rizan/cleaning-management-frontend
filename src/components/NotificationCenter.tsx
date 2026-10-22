@@ -21,7 +21,10 @@ export type NotificationType =
   | 'complaint-rejected'
   | 'payment-reduction-approved'
   | 'invoice-approval'
-  | 'payment-failed';
+  | 'payment-failed'
+  | 'refund-initiated'
+  | 'cancellation'
+  | 'update';
 
 export interface Notification {
   _id: string; // Changed from id to _id to match MongoDB
@@ -69,10 +72,13 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
       const accessToken = tokenStorage.getAccessToken();
       const headers: Record<string, string> = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
       // FIX: use /user/:userId (auth-protected) not /:userId (which no longer exists)
-      const response = await fetch(`${API_BASE_URL}/notifications/user/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/notifications`, {
         headers,
       });
-      if (!response.ok) throw new Error('Failed to fetch notifications');
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`Failed to fetch notifications (HTTP ${response.status}${detail ? `: ${detail}` : ''})`);
+      }
       const data: Notification[] = await response.json();
       setNotifications(data);
     } catch (error) {
@@ -98,11 +104,11 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
 
     try {
       const accessToken = tokenStorage.getAccessToken();
-      await fetch(`${API_BASE_URL}/notifications/${notificationId}/read`, {
+      const response = await fetch(`${API_BASE_URL}/notifications/${notificationId}/read`, {
         method: 'PUT',
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
       });
-      // No need to refetch, UI is already updated
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
     } catch (error) {
       console.error("Error marking notification as read:", error);
       // Revert UI update on error
@@ -120,10 +126,11 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
     try {
       const accessToken = tokenStorage.getAccessToken();
       // FIX: Backend route is PUT /mark-all-read (no userId param — uses req.user.id from JWT)
-      await fetch(`${API_BASE_URL}/notifications/mark-all-read`, {
+      const response = await fetch(`${API_BASE_URL}/notifications/mark-all-read`, {
         method: 'PUT',
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
     } catch (error) {
       console.error("Error marking all notifications as read:", error);
       // Revert on error
@@ -138,10 +145,11 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
     try {
       const accessToken = tokenStorage.getAccessToken();
       // FIX: Backend route is DELETE /all (not DELETE /user/:userId)
-      await fetch(`${API_BASE_URL}/notifications/all`, {
+      const response = await fetch(`${API_BASE_URL}/notifications/all`, {
         method: 'DELETE',
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
     } catch (error) {
       console.error("Error deleting all notifications:", error);
       setNotifications(originalNotifications);
@@ -155,10 +163,11 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
 
     try {
       const accessToken = tokenStorage.getAccessToken();
-      await fetch(`${API_BASE_URL}/notifications/${notificationId}`, {
+      const response = await fetch(`${API_BASE_URL}/notifications/${notificationId}`, {
         method: 'DELETE',
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
     } catch (error) {
       console.error("Error deleting notification:", error);
       setNotifications(originalNotifications);

@@ -142,8 +142,12 @@ export default function PriceReductionWorkflow({ user }: PriceReductionWorkflowP
         // ever reaches the frontend (see controllers/invoiceController.js),
         // so that's the value both this list and the link actually carry.
         if (preselectBookingId) {
-          const match = eligible.find(b => b.bookingId === preselectBookingId);
-          if (match) setSelected(match);
+          const match = eligible.find(b => String(b.bookingId) === String(preselectBookingId));
+          if (match) {
+            setSelected(match);
+          } else {
+            setError(`No eligible paid invoice was found for booking "${preselectBookingId}".`);
+          }
         }
       } catch (err: any) {
         setError(err.message);
@@ -323,7 +327,11 @@ export default function PriceReductionWorkflow({ user }: PriceReductionWorkflowP
         </button>
 
         <h1 className="text-3xl font-bold text-gray-900 mb-1">Request a Price Reduction</h1>
-        <p className="text-gray-500 mb-8">Select an invoice and explain why you'd like a price adjustment</p>
+        <p className="text-gray-500 mb-8">
+          {preselectBookingId
+            ? `Explain why you'd like a price adjustment for booking ${preselectBookingId}.`
+            : "Select an invoice and explain why you'd like a price adjustment"}
+        </p>
 
         {isLoading ? (
           <div className="bg-white rounded-xl p-12 text-center shadow-sm">
@@ -341,6 +349,8 @@ export default function PriceReductionWorkflow({ user }: PriceReductionWorkflowP
             <p className="text-gray-500">No eligible invoices found. Only paid invoices can be adjusted.</p>
           </div>
         ) : (
+          <>
+          {!preselectBookingId && (
           <div className="space-y-4 mb-6">
             {invoices.map(inv => {
               const isSelected = selected?._id === inv._id;
@@ -369,6 +379,8 @@ export default function PriceReductionWorkflow({ user }: PriceReductionWorkflowP
               );
             })}
           </div>
+          )}
+          </>
         )}
 
         {selected && (

@@ -157,7 +157,7 @@ export class PaymentReminderService {
         title: reminder.title,
         message: reminder.message,
         bookingId: invoice.bookingId,
-        actionUrl: `/balance-payment?invoice=${invoice.invoiceNumber}`,
+        actionUrl: `/balance-payment?invoiceId=${invoice._id}`,
       });
 
       // Log the reminder

@@ -76,6 +76,6 @@ export const addNotification = async (notificationData: NewNotificationPayload):
       });
     }
   } catch (error) {
-    // Error is caught but not handled to keep the console clean.
+    console.error('Error adding notification:', error);
   }
 };

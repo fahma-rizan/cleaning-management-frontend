@@ -193,6 +193,12 @@ export default function FinancialDashboard({ user }: FinancialDashboardProps) {
   const [searchParams] = useSearchParams();
   const initialTab = (searchParams.get('tab') as DashboardTab) || 'invoices';
   const [activeTab, setActiveTab] = useState<DashboardTab>(initialTab);
+  useEffect(() => {
+    const requestedTab = searchParams.get('tab');
+    if (requestedTab === 'invoices' || requestedTab === 'refunds' || requestedTab === 'price-reductions') {
+      setActiveTab(requestedTab);
+    }
+  }, [searchParams]);
   const [reductionProcessingId, setReductionProcessingId] = useState<string | null>(null);
   // NEW — the price reduction currently open in the detail modal (see the
   // Price Reductions tab below). Approving/rejecting straight from the
@@ -236,7 +242,10 @@ export default function FinancialDashboard({ user }: FinancialDashboardProps) {
       const tokens = tokenStorage.getTokens();
       const authHeader = tokens?.accessToken ? { Authorization: `Bearer ${tokens.accessToken}` } : {};
       const response = await fetch(`${API_BASE_URL}/refunds`, { headers: authHeader });
-      if (!response.ok) throw new Error('Failed to fetch refunds');
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`Failed to fetch refunds (HTTP ${response.status}${detail ? `: ${detail}` : ''})`);
+      }
       const data = await response.json();
       setRefunds(data);
     } catch (err: any) {
@@ -249,7 +258,10 @@ export default function FinancialDashboard({ user }: FinancialDashboardProps) {
       const tokens = tokenStorage.getTokens();
       const authHeader = tokens?.accessToken ? { Authorization: `Bearer ${tokens.accessToken}` } : {};
       const response = await fetch(`${API_BASE_URL}/price-reductions`, { headers: authHeader });
-      if (!response.ok) throw new Error('Failed to fetch price reductions');
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`Failed to fetch price reductions (HTTP ${response.status}${detail ? `: ${detail}` : ''})`);
+      }
       const data = await response.json();
       setPriceReductions(data);
     } catch (err: any) {
@@ -628,9 +640,9 @@ export default function FinancialDashboard({ user }: FinancialDashboardProps) {
             userId: userId,
             type: 'payment',
             title: 'Balance Payment Required 💳',
-            message: `Your service is complete! Please pay the remaining balance of Rs. ${invoice.balanceAmount.toLocaleString()}. Click here to pay: /balance-payment?invoice=${invoice.invoiceNumber}`,
+            message: `Your service is complete! Please pay the remaining balance of Rs. ${invoice.balanceAmount.toLocaleString()}. Click here to pay: /balance-payment?invoiceId=${invoice._id}`,
             bookingId: bookingId,
-            actionUrl: `/balance-payment?invoice=${invoice.invoiceNumber}`,
+            actionUrl: `/balance-payment?invoiceId=${invoice._id}`,
           });
         } else if (invoice.paymentMethod?.toLowerCase().includes('after completion') || invoice.paidAmount === 0) {
           // Send full payment link for pay-after-completion
@@ -638,9 +650,9 @@ export default function FinancialDashboard({ user }: FinancialDashboardProps) {
             userId: userId,
             type: 'payment',
             title: 'Payment Required 💳',
-            message: `Your service is complete! Please pay Rs. ${invoice.totalAmount.toLocaleString()}. Click here to pay: /payment-link?invoice=${invoice.invoiceNumber}`,
+            message: `Your service is complete! Please pay Rs. ${invoice.totalAmount.toLocaleString()}. Click here to pay: /balance-payment?invoiceId=${invoice._id}`,
             bookingId: bookingId,
-            actionUrl: `/payment-link?invoice=${invoice.invoiceNumber}`,
+            actionUrl: `/balance-payment?invoiceId=${invoice._id}`,
           });
         }
       }
@@ -1023,10 +1035,7 @@ export default function FinancialDashboard({ user }: FinancialDashboardProps) {
                 </p>
               </div>
               <button
-                onClick={() => {
-                  // Scroll to the invoice table and filter to show DRAFT invoices
-                  document.querySelector('table')?.scrollIntoView({ behavior: 'smooth' });
-                }}
+                onClick={() => navigate('/admin/financial-dashboard?tab=invoices')}
                 className="text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
               >
                 Review Now
@@ -1047,7 +1056,7 @@ export default function FinancialDashboard({ user }: FinancialDashboardProps) {
                 </p>
               </div>
               <button
-                onClick={() => document.getElementById('pending-refunds-panel')?.scrollIntoView({ behavior: 'smooth' })}
+                onClick={() => navigate('/admin/refunds')}
                 className="text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
               >
                 Review Now
@@ -1258,7 +1267,7 @@ export default function FinancialDashboard({ user }: FinancialDashboardProps) {
 
             {/* Tab: All Invoices */}
             {activeTab === 'invoices' && (
-              <div className="p-6">
+              <div id="invoices-panel" className="p-6">
                 <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead>
@@ -1393,7 +1402,7 @@ export default function FinancialDashboard({ user }: FinancialDashboardProps) {
 
             {/* Tab: Refunds & Credit Notes */}
             {activeTab === 'refunds' && (
-              <div className="p-6">
+              <div id="pending-refunds-panel" className="p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                   Refunds & Credit Notes
                   {metrics.pendingRefundCount > 0 && (

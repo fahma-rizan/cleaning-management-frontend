@@ -5,6 +5,7 @@ import { addNotification } from '../utils/notificationUtils';
 import InvoiceGenerator, { InvoiceData, InvoiceType } from './InvoiceGenerator';
 import type { User } from '../types';
 import DemoTopBar from './DemoTopBar';
+import { tokenStorage } from '../utils/auth';
 
 interface PaymentLinkPageProps {
   user: User;
@@ -39,20 +40,19 @@ export default function PaymentLinkPage({ user }: PaymentLinkPageProps) {
 
   const fetchInvoiceData = async (invoiceNumber: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/invoices/${invoiceNumber}`);
+      const tokens = tokenStorage.getTokens();
+      const headers = tokens?.accessToken
+        ? { Authorization: `Bearer ${tokens.accessToken}` }
+        : {};
+      const response = await fetch(`${API_BASE_URL}/invoices/${invoiceNumber}`, { headers });
       if (!response.ok) throw new Error('Invoice not found');
       const invoiceData = await response.json();
-      
-      // Set booking data from invoice
-      const bookingData = {
-        bookingId: invoiceData.bookingId,
-        serviceType: invoiceData.service?.name || 'Cleaning Service',
-        price: invoiceData.totalAmount,
-        customer: invoiceData.customer
-      };
-      
-      // Update state with fetched data
-      localStorage.setItem('paymentLinkBooking', JSON.stringify(bookingData));
+
+      // Legacy payment-link URLs used an invoice number. The real payment
+      // flow uses the invoice ObjectId so the backend can update that invoice
+      // instead of creating a separate local-only payment record.
+      navigate(`/balance-payment?invoiceId=${encodeURIComponent(invoiceData._id)}`, { replace: true });
+      return;
       
     } catch (error) {
       console.error('Error fetching invoice:', error);
