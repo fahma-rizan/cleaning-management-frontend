@@ -28,11 +28,12 @@ export const adminAPI = {
     return res.json();
   },
 
+    // No password field — the backend always generates a secure random temp
+    // password and emails it to the new admin (see createOnboardedUser).
     create: async (
     data: {
       name: string;
       email: string;
-      password: string;
       nic?: string;
       phone?: string;
       address?: string;

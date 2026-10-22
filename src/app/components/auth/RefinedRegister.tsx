@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, Lock, Eye, EyeOff } from 'lucide-react';
 import { BrandHeader, AuthCard, AuthInput, AuthButton, AlertBanner, StaffFooter } from './AuthShared';
+import { requestGoogleAuth } from '../../lib/googleAuth';
+import { isValidPassword, isValidPhone, PASSWORD_RULE, PHONE_RULE, PASSWORD_CHECKLIST } from '../../lib/validation';
 
 // Google Icon SVG Component
 const GoogleIcon = () => (
@@ -13,7 +15,7 @@ const GoogleIcon = () => (
   </svg>
 );
 
-export default function RefinedRegister() {
+export default function RefinedRegister({ onLogin }: { onLogin?: (u: any) => void } = {}) {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -45,11 +47,15 @@ export default function RefinedRegister() {
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       errors.email = "Please enter a valid email address";
     }
-    if (!formData.phone) errors.phone = "This field is required";
+    if (!formData.phone) {
+      errors.phone = "This field is required";
+    } else if (!isValidPhone(formData.phone)) {
+      errors.phone = PHONE_RULE;
+    }
     if (!formData.password) {
       errors.password = "This field is required";
-    } else if (formData.password.length < 8) {
-      errors.password = "Password must be at least 8 characters";
+    } else if (!isValidPassword(formData.password)) {
+      errors.password = PASSWORD_RULE;
     }
     if (formData.password !== formData.confirmPassword) errors.confirmPassword = "Passwords do not match";
 
@@ -100,9 +106,36 @@ export default function RefinedRegister() {
     }
   };
 
-  const handleGoogleSignUp = () => {
-    // Google OAuth - to be implemented later
-    setError('Google Sign-Up coming soon. Please use email and password.');
+  const handleGoogleSignUp = async () => {
+    setError('');
+    setIsLoading(true);
+    try {
+      const googleAuthResult = await requestGoogleAuth();
+      const response = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(googleAuthResult),
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        // Google already verifies the email — no OTP step needed, unlike
+        // the password sign-up path above.
+        localStorage.setItem('token', data.token);
+        if (onLogin) onLogin(data.user);
+        if (data.user.role === 'admin' || data.user.role === 'staff') {
+          navigate(data.user.requiresPasswordChange ? '/staff-first-login' : `/${data.user.role}`);
+        } else {
+          navigate('/dashboard');
+        }
+      } else {
+        setError(data.message || 'Google sign-up failed. Please try again.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Google sign-up failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -126,6 +159,7 @@ export default function RefinedRegister() {
               placeholder="Jane Doe"
               leftIcon={<User size={18} />}
               name="fullName"
+              autoComplete="name"
               value={formData.fullName}
               onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
               error={fieldErrors.fullName}
@@ -136,6 +170,7 @@ export default function RefinedRegister() {
               placeholder="+94 71 234 5678"
               leftIcon={<Phone size={18} />}
               name="phone"
+              autoComplete="tel"
               value={formData.phone}
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
               error={fieldErrors.phone}
@@ -147,6 +182,7 @@ export default function RefinedRegister() {
             placeholder="you@example.com"
             leftIcon={<Mail size={18} />}
             name="email"
+            autoComplete="email"
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             error={fieldErrors.email}
@@ -161,6 +197,7 @@ export default function RefinedRegister() {
               rightIcon={showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               onClickRightIcon={() => setShowPassword(!showPassword)}
               name="password"
+              autoComplete="new-password"
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               error={fieldErrors.password}
@@ -174,11 +211,25 @@ export default function RefinedRegister() {
               rightIcon={showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               onClickRightIcon={() => setShowConfirmPassword(!showConfirmPassword)}
               name="confirmPassword"
+              autoComplete="new-password"
               value={formData.confirmPassword}
               onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
               error={fieldErrors.confirmPassword}
             />
           </div>
+
+          {formData.password && (
+            <div className="bg-[#F9FAFB] rounded-lg p-3 border border-[#E5E7EB] grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {PASSWORD_CHECKLIST.map(({ key, label, test }) => {
+                const met = test(formData.password);
+                return (
+                  <div key={key} className={`text-xs flex items-center gap-1.5 ${met ? 'text-green-600' : 'text-[#9CA3AF]'}`}>
+                    <span>{met ? '✓' : '○'}</span> {label}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           <AuthButton type="submit" isLoading={isLoading}>
             Create Account

@@ -94,7 +94,6 @@ export function StaffManagement() {
     email: "",
     phone: "",
     nic: "",
-    password: "",
     address: "",
     specializations: [] as string[],
     status: "Active" as "Active" | "Inactive",
@@ -130,16 +129,13 @@ export function StaffManagement() {
   const handleSaveStaff = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const isCreating = view === "add" || !editingStaff;
-
     // Basic validation
     if (
       !formData.photo ||
       !formData.fullName ||
       !formData.email ||
       !formData.phone ||
-      !formData.nic ||
-      (isCreating && !formData.password)
+      !formData.nic
     ) {
       toast.error("Please fill all compulsory fields and upload a photo");
       return;
@@ -172,7 +168,6 @@ export function StaffManagement() {
       fd.append("email", formData.email);
       fd.append("phone", formData.phone);
       fd.append("nic", formData.nic);
-      if (isCreating) fd.append("password", formData.password);
       fd.append("address", formData.address);
       fd.append("specializations", JSON.stringify(formData.specializations));
       fd.append("status", formData.status);
@@ -201,7 +196,6 @@ export function StaffManagement() {
         email: "",
         phone: "",
         nic: "",
-        password: "",
         address: "",
         specializations: [],
         status: "Active",
@@ -362,22 +356,10 @@ export function StaffManagement() {
                 }
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700">
-                Password *
-              </label>
-              <Input
-                required
-                type="password"
-                name="password"
-                autoComplete="new-password"
-                placeholder="Enter password"
-                className="h-12 rounded-xl"
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
-              />
+            <div className="space-y-2 sm:col-span-2 p-3 bg-purple-50 border border-purple-100 rounded-xl text-xs text-purple-800">
+              A secure temporary password will be generated automatically and
+              emailed to this staff member — they'll be required to set their
+              own password the first time they log in.
             </div>
             <div className="space-y-2">
               <label className="text-sm font-semibold text-gray-700">

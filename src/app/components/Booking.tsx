@@ -112,6 +112,10 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
     sofaUnits: 1,
     sofaSeatingCapacity: 1,
     mattressCount: 1,
+    // Drives per-mattress material consumption (consumptionrates.sizeVariants) —
+    // casing matches the Booking schema enum exactly.
+    mattressSize: 'Queen' as 'Single' | 'Double' | 'Queen' | 'King',
+    mattressCleaningLevel: 'Full' as 'Full' | 'Top Only',
     carpetCount: 1,
     carpetSquareFeet: 50,
     mattressSquareFeet: 50,
@@ -157,6 +161,8 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
       sofaUnits: rebookFrom.sofaUnits ?? prev.sofaUnits,
       sofaSeatingCapacity: rebookFrom.sofaSeatingCapacity ?? prev.sofaSeatingCapacity,
       mattressCount: rebookFrom.mattressCount ?? prev.mattressCount,
+      mattressSize: rebookFrom.mattressSize ?? prev.mattressSize,
+      mattressCleaningLevel: rebookFrom.mattressCleaningLevel ?? prev.mattressCleaningLevel,
       carpetCount: rebookFrom.carpetCount ?? prev.carpetCount,
       carpetSquareFeet: rebookFrom.carpetSquareFeet ?? prev.carpetSquareFeet,
       mattressSquareFeet: rebookFrom.mattressSquareFeet ?? prev.mattressSquareFeet,
@@ -358,6 +364,10 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
       errors.items = 'Please select at least one item from the price list.';
     if (isHomeCleaningService && bookingData.squareFeet <= 0)
       errors.squareFeet = 'Please enter the area size in square feet.';
+    if (isMattressCleaning && !bookingData.mattressSize)
+      errors.mattressSize = 'Please select a mattress size.';
+    if (isMattressCleaning && !bookingData.mattressCleaningLevel)
+      errors.mattressCleaningLevel = 'Please select a cleaning level.';
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -1005,6 +1015,48 @@ export default function Booking({ user, onLogout, theme, onToggleTheme, onProfil
                         </button>
                         <span className="text-gray-500 ml-2">(LKR 750 per mattress)</span>
                       </div>
+
+                      <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 pt-2">
+                        Mattress size
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {(['Single', 'Double', 'Queen', 'King'] as const).map(size => (
+                          <button
+                            key={size}
+                            type="button"
+                            onClick={() => handleInputChange('mattressSize', size)}
+                            className={`px-5 py-2.5 rounded-xl border-2 font-semibold transition-all ${
+                              bookingData.mattressSize === size
+                                ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/10 dark:text-white'
+                                : 'border-gray-100 dark:border-gray-700 hover:border-purple-300 dark:text-gray-300'
+                            }`}
+                          >
+                            {size}
+                          </button>
+                        ))}
+                      </div>
+                      {formErrors.mattressSize && <p className="text-red-500 text-sm">{formErrors.mattressSize}</p>}
+
+                      <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 pt-2">
+                        Cleaning level
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {(['Full', 'Top Only'] as const).map(level => (
+                          <button
+                            key={level}
+                            type="button"
+                            onClick={() => handleInputChange('mattressCleaningLevel', level)}
+                            className={`px-5 py-2.5 rounded-xl border-2 font-semibold transition-all ${
+                              bookingData.mattressCleaningLevel === level
+                                ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/10 dark:text-white'
+                                : 'border-gray-100 dark:border-gray-700 hover:border-purple-300 dark:text-gray-300'
+                            }`}
+                          >
+                            {level}
+                          </button>
+                        ))}
+                      </div>
+                      {formErrors.mattressCleaningLevel && <p className="text-red-500 text-sm">{formErrors.mattressCleaningLevel}</p>}
                     </div>
                   )}
 

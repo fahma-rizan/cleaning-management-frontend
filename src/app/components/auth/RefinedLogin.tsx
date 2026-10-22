@@ -1,6 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AlertCircle, Eye, EyeOff } from "lucide-react";
+import { requestGoogleAuth } from "../../lib/googleAuth";
+
+// Remember-me storage — deliberately its own key, never touched by the
+// registration form (RefinedRegister.tsx never reads this), so a saved
+// login can't leak into the sign-up form.
+const REMEMBERED_CREDENTIALS_KEY = "rememberedCredentials";
 
 // Google Icon SVG Component
 const GoogleIcon = () => (
@@ -44,6 +50,43 @@ export default function RefinedLogin({
     password: "",
   });
 
+  // Restore remembered credentials on mount — ONLY if the user previously
+  // checked "Remember me". Nothing is pre-filled otherwise.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(REMEMBERED_CREDENTIALS_KEY);
+      if (saved) {
+        const { email, password } = JSON.parse(saved);
+        setFormData({ email: email || "", password: password || "" });
+        setRememberMe(true);
+      }
+    } catch {
+      localStorage.removeItem(REMEMBERED_CREDENTIALS_KEY);
+    }
+  }, []);
+
+  // Navigates based on role, and detours through the mandatory first-login
+  // password change screen for any account still carrying a temp password
+  // (staff or admin — see services/userOnboardingService.js on the backend).
+  const navigateAfterAuth = (user: any) => {
+    if (user.role === "admin" || user.role === "staff") {
+      navigate(user.requiresPasswordChange ? "/staff-first-login" : `/${user.role}`);
+    } else {
+      navigate("/dashboard");
+    }
+  };
+
+  const applyRememberMe = () => {
+    if (rememberMe) {
+      localStorage.setItem(
+        REMEMBERED_CREDENTIALS_KEY,
+        JSON.stringify({ email: formData.email, password: formData.password })
+      );
+    } else {
+      localStorage.removeItem(REMEMBERED_CREDENTIALS_KEY);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -59,22 +102,10 @@ export default function RefinedLogin({
       const data = await response.json();
 
       if (data.success) {
-        // Store token and user
+        applyRememberMe();
         localStorage.setItem("token", data.token);
         if (onLogin) onLogin(data.user);
-
-        // Navigate based on role
-        if (data.user.role === "admin") {
-          navigate("/admin");
-        } else if (data.user.role === "staff") {
-          if (data.user.requiresPasswordChange) {
-            navigate("/staff-first-login");
-          } else {
-            navigate("/staff");
-          }
-        } else {
-          navigate("/dashboard");
-        }
+        navigateAfterAuth(data.user);
       } else {
         // If customer hasn't verified email yet, go to OTP page
         if (data.requiresVerification) {
@@ -91,33 +122,48 @@ export default function RefinedLogin({
     }
   };
 
-  const handleGoogleSignIn = () => {
-    // Google OAuth - to be implemented later
-    setError("Google Sign-In coming soon. Please use email and password.");
+  const handleGoogleSignIn = async () => {
+    setError("");
+    setIsLoading(true);
+    try {
+      const googleAuthResult = await requestGoogleAuth();
+      const response = await fetch("/api/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(googleAuthResult),
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        localStorage.setItem("token", data.token);
+        if (onLogin) onLogin(data.user);
+        navigateAfterAuth(data.user);
+      } else {
+        setError(data.message || "Google sign-in failed. Please try again.");
+        setIsLoading(false);
+      }
+    } catch (err: any) {
+      setError(err.message || "Google sign-in failed. Please try again.");
+      setIsLoading(false);
+    }
   };
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center bg-gray-50"
-      style={{ height: "982px", width: "1512px" }}
-    >
+    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50 p-4">
       {/* Container with margin */}
-      <div
-        className="flex bg-white rounded-2xl shadow-2xl overflow-hidden"
-        style={{ width: "1300px", height: "750px" }}
-      >
+      <div className="flex flex-col md:flex-row w-full max-w-[1300px] bg-white rounded-2xl shadow-2xl overflow-hidden">
         {/* Left Panel - Login Form */}
-        <div className="w-1/2 bg-white flex flex-col justify-center px-12 py-8">
+        <div className="w-full md:w-1/2 bg-white flex flex-col justify-center px-6 sm:px-12 py-8">
           <div className="max-w-md mx-auto w-full">
             {/* Logo */}
-            <div className="mb-8 flex items-center gap-3">
+            <div className="mb-8 flex items-center gap-3 flex-wrap">
               <img
                 src="/src/imports/Gemini_Generated_Image_f8k5uhf8k5uhf8k5-2.png"
                 alt="Cloud Laundry Logo"
-                className="w-48 h-auto object-contain"
+                className="w-32 sm:w-48 h-auto object-contain"
               />
               <h1
-                className="text-xl font-bold whitespace-nowrap"
+                className="text-base sm:text-xl font-bold whitespace-nowrap"
                 style={{ color: "#8B5CF6" }}
               >
                 CLOUD LAUNDRY.LK
@@ -150,6 +196,7 @@ export default function RefinedLogin({
                 </label>
                 <input
                   type="email"
+                  autoComplete="username"
                   value={formData.email}
                   onChange={(e) =>
                     setFormData({ ...formData, email: e.target.value })
@@ -168,6 +215,7 @@ export default function RefinedLogin({
                 <div className="relative">
                   <input
                     type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
                     value={formData.password}
                     onChange={(e) =>
                       setFormData({ ...formData, password: e.target.value })
@@ -278,8 +326,8 @@ export default function RefinedLogin({
           </div>
         </div>
 
-        {/* Right Panel - T-shirt Image */}
-        <div className="w-1/2 bg-gray-100">
+        {/* Right Panel - T-shirt Image (hidden on small screens — keeps the form full-width and unsquished) */}
+        <div className="hidden md:block md:w-1/2 bg-gray-100">
           <img
             src="/src/imports/3FF9CCBC-5AAC-4661-B40B-B0948D3AEC55-1.jpeg"
             alt="Cloud Laundry Service"

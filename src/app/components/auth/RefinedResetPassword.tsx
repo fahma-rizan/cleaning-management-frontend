@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { BrandHeader, AuthCard, AuthInput, AuthButton, AlertBanner, StaffFooter } from './AuthShared';
+import { isValidPassword, PASSWORD_RULE, PASSWORD_CHECKLIST } from '../../lib/validation';
 
 export default function RefinedResetPassword() {
   const navigate = useNavigate();
@@ -23,8 +24,8 @@ export default function RefinedResetPassword() {
 
     if (!formData.password) {
       errors.password = 'Password is required';
-    } else if (formData.password.length < 8) {
-      errors.password = 'Password must be at least 8 characters';
+    } else if (!isValidPassword(formData.password)) {
+      errors.password = PASSWORD_RULE;
     }
 
     if (!formData.confirmPassword) {
@@ -100,6 +101,7 @@ export default function RefinedResetPassword() {
             leftIcon={<Lock size={18} />}
             rightIcon={showPass ? <EyeOff size={18} /> : <Eye size={18} />}
             onClickRightIcon={() => setShowPass(!showPass)}
+            autoComplete="new-password"
             value={formData.password}
             onChange={(e) => setFormData({...formData, password: e.target.value})}
             error={fieldErrors.password}
@@ -113,6 +115,7 @@ export default function RefinedResetPassword() {
             leftIcon={<Lock size={18} />}
             rightIcon={showConfirmPass ? <EyeOff size={18} /> : <Eye size={18} />}
             onClickRightIcon={() => setShowConfirmPass(!showConfirmPass)}
+            autoComplete="new-password"
             value={formData.confirmPassword}
             onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
             error={fieldErrors.confirmPassword}
@@ -122,18 +125,12 @@ export default function RefinedResetPassword() {
           <div className="bg-[#F3F4F6] rounded-lg p-4 border border-[#E5E7EB]">
             <p className="text-xs text-[#6B7280] font-medium mb-2">Password must contain:</p>
             <ul className="space-y-1 text-xs text-[#6B7280]">
-              <li className="flex items-center gap-2">
-                <span className={`w-1 h-1 rounded-full ${formData.password.length >= 8 ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                At least 8 characters
-              </li>
-              <li className="flex items-center gap-2">
-                <span className={`w-1 h-1 rounded-full ${/[A-Z]/.test(formData.password) ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                One uppercase letter
-              </li>
-              <li className="flex items-center gap-2">
-                <span className={`w-1 h-1 rounded-full ${/[0-9]/.test(formData.password) ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                One number
-              </li>
+              {PASSWORD_CHECKLIST.map(({ key, label, test }) => (
+                <li key={key} className="flex items-center gap-2">
+                  <span className={`w-1 h-1 rounded-full ${test(formData.password) ? 'bg-green-500' : 'bg-gray-300'}`}></span>
+                  {label}
+                </li>
+              ))}
             </ul>
           </div>
 

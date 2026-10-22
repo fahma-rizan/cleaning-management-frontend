@@ -867,6 +867,7 @@ export function ReportsManagement() {
             </div>
           </div>
 
+          <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
@@ -1014,6 +1015,7 @@ export function ReportsManagement() {
               ))}
             </tbody>
           </table>
+          </div>
 
           {reportData.length > 10 && (
             <div className="p-4 text-center text-sm text-gray-500 border-t border-gray-100">

@@ -76,9 +76,12 @@ export default function RefinedOTPVerify({ onLogin }: Props) {
       const data = await response.json();
 
       if (data.success) {
-        // Store token and user, then go to success page
-        localStorage.setItem('token', data.token);
-        if (onLogin) onLogin(data.user);
+        // Verifying the email is not the same as signing in — deliberately
+        // NOT storing the token/calling onLogin here. The success page
+        // (type=registration) tells the user they'll land on the sign-in
+        // page; establishing a session here made that untrue: the /login
+        // route redirects an already-authenticated user straight to their
+        // dashboard, so "Go to Sign In" silently skipped sign-in entirely.
         sessionStorage.removeItem('pendingEmail');
         setSuccess('Email verified successfully!');
         setTimeout(() => navigate('/success?type=registration'), 1000);

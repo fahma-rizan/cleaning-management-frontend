@@ -1,399 +1,244 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  ChevronLeft, 
-  Plus, 
-  Trash2, 
-  Camera, 
-  CheckCircle2, 
-  Save, 
-  X,
-  Package,
-  Calendar as CalendarIcon,
-  Info,
-  UploadCloud,
+import { useState, useEffect } from 'react';
+import {
+  ChevronLeft,
+  CheckCircle2,
+  Droplets,
   AlertTriangle,
-  Wrench,
-  Droplets
+  Loader2,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
-import { Checkbox } from '../ui/checkbox';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { fetchWithAuth } from '../../utils/api';
 
-interface MaterialItem {
-  id: string;
+// Consumables only — this form reports actual usage against exactly what
+// was allocated (the confirmed MaterialRequest for this booking). There is
+// no equipment section and no way to add arbitrary items: the allocated set
+// is fixed, staff can only report how much of each was actually used.
+interface AllocatedItem {
+  sku: string;
   name: string;
-  quantity: number;
   unit: string;
-  defaultQty: number;
-  stock: number;
-  selected: boolean;
-  lowStock?: boolean;
-  type: 'equipment' | 'material';
+  qtyAllocated: number;
+  qtyActualReported: number; // editable, defaults to qtyAllocated
 }
 
-const SERVICE_CONFIGS: Record<string, { equipment: string[], materials: string[] }> = {
-  "House Deep Cleaning": {
-    equipment: ["Vacuum Cleaner", "Steam Cleaning Machine", "Floor Scrubber / Polishing Machine", "High-Pressure Washer", "Mop & Bucket Set", "Scrub Brushes", "Microfiber Cloths", "Step Ladder", "Wet Floor Warning Sign"],
-    materials: ["Multi-purpose Cleaner", "Disinfectant Solution", "Floor Cleaner", "Glass Cleaner", "Toilet Cleaner", "Degreaser", "Garbage Bags", "Disposable Gloves", "Face Masks"]
-  },
-  "General Cleaning": {
-    equipment: ["Vacuum Cleaner", "Mop & Bucket Set", "Broom & Dustpan", "Microfiber Cloths", "Cleaning Cart"],
-    materials: ["Multi-purpose Cleaner", "Floor Cleaner", "Glass Cleaner", "Disinfectant Solution", "Garbage Bags", "Disposable Gloves"]
-  },
-  "Commercial Cleaning": {
-    equipment: ["Vacuum Cleaner", "Floor Scrubber / Polishing Machine", "Mop & Bucket Set", "Cleaning Cart", "Wet Floor Warning Sign"],
-    materials: ["Multi-purpose Cleaner", "Disinfectant Solution", "Floor Cleaner", "Glass Cleaner", "Toilet Cleaner", "Air Freshener", "Garbage Bags", "Disposable Gloves", "Face Masks"]
-  },
-  "Floor Cleaning": {
-    equipment: ["Floor Scrubber / Polishing Machine", "Mop & Bucket Set", "Scrub Brushes", "Wet Floor Warning Sign"],
-    materials: ["Floor Cleaner", "Disinfectant Solution"]
-  },
-  "Floor – Cut and Polish": {
-    equipment: ["Floor Scrubber / Polishing Machine", "High-Pressure Washer", "Mop & Bucket Set", "Wet Floor Warning Sign"],
-    materials: ["Floor Cleaner", "Disinfectant Solution"]
-  },
-  "Sofa Cleaning": {
-    equipment: ["Vacuum Cleaner", "Steam Cleaning Machine", "Carpet Shampoo Machine", "Microfiber Cloths"],
-    materials: ["Carpet / Upholstery Shampoo", "Stain Remover", "Deodorizer", "Disposable Gloves"]
-  },
-  "Mattress Cleaning with Steam": {
-    equipment: ["Vacuum Cleaner", "Steam Cleaning Machine", "Microfiber Cloths"],
-    materials: ["Disinfectant Solution", "Stain Remover", "Deodorizer", "Disposable Gloves", "Face Masks"]
-  },
-  "Carpet Cleaning": {
-    equipment: ["Vacuum Cleaner", "Carpet Shampoo Machine", "Steam Cleaning Machine", "Wet Floor Warning Sign"],
-    materials: ["Carpet / Upholstery Shampoo", "Stain Remover", "Deodorizer", "Disposable Gloves"]
-  },
-  "Curtain Cleaning": {
-    equipment: ["Steam Cleaning Machine", "Vacuum Cleaner", "Step Ladder", "Microfiber Cloths"],
-    materials: ["Carpet / Upholstery Shampoo", "Stain Remover", "Deodorizer", "Disposable Gloves"]
-  }
-};
-
-const getInitialItems = (serviceType: string): MaterialItem[] => {
-  const config = SERVICE_CONFIGS[serviceType] || SERVICE_CONFIGS["General Cleaning"];
-  
-  const equipmentItems = config.equipment.map((name, index) => ({
-    id: `eq-${index}-${Date.now()}`,
-    name,
-    quantity: 1,
-    unit: 'pieces',
-    defaultQty: 1,
-    stock: Math.floor(Math.random() * 20) + 5,
-    selected: true,
-    type: 'equipment' as const
-  }));
-
-  const materialItems = config.materials.map((name, index) => ({
-    id: `mat-${index}-${Date.now()}`,
-    name,
-    quantity: name.includes('Cleaner') || name.includes('Solution') ? 1 : 2,
-    unit: name.includes('Cleaner') || name.includes('Solution') || name.includes('Shampoo') ? 'liters' : 'pieces',
-    defaultQty: 1,
-    stock: Math.floor(Math.random() * 30) + 2,
-    selected: true,
-    lowStock: Math.random() < 0.2, // Randomly set some as low stock for demo
-    type: 'material' as const
-  }));
-
-  return [...equipmentItems, ...materialItems];
-};
+interface BookingSummary {
+  bookingRef: string;
+  customerName: string;
+  serviceType: string;
+  scheduledDate: string;
+}
 
 export default function CompleteServiceForm() {
   const navigate = useNavigate();
   const { bookingId } = useParams();
-  
-  const [serviceId] = useState(bookingId || `CL-${Math.floor(100000 + Math.random() * 900000)}`);
-  const [clientName] = useState('John Doe'); 
-  const [serviceType, setServiceType] = useState('House Deep Cleaning');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [items, setItems] = useState<MaterialItem[]>([]);
-  const [notes, setNotes] = useState('');
+
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [booking, setBooking] = useState<BookingSummary | null>(null);
+  const [items, setItems] = useState<AllocatedItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   useEffect(() => {
-    setItems(getInitialItems(serviceType));
-  }, [serviceType]);
-
-  const handleItemChange = (id: string, field: keyof MaterialItem, value: any) => {
-    setItems(prev => prev.map(m => m.id === id ? { ...m, [field]: value } : m));
-  };
-
-  const toggleItem = (id: string) => {
-    setItems(prev => prev.map(m => m.id === id ? { ...m, selected: !m.selected } : m));
-  };
-
-  const addItem = (type: 'equipment' | 'material') => {
-    const newId = Date.now().toString();
-    setItems([
-      ...items, 
-      { 
-        id: newId, 
-        name: '', 
-        quantity: 0, 
-        unit: type === 'material' ? 'liters' : 'pieces', 
-        defaultQty: 0, 
-        stock: 0, 
-        selected: true,
-        type
-      }
-    ]);
-  };
-
-  const removeItem = (id: string) => {
-    setItems(prev => prev.filter(m => m.id !== id));
-  };
-
-  const handleSubmit = (status: 'submitted' | 'draft') => {
-    setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      if (status === 'submitted') {
-        // Mark this booking as having material usage submitted
-        if (bookingId) {
-          const existing: string[] = JSON.parse(localStorage.getItem('submittedMaterialUsage') || '[]');
-          if (!existing.includes(bookingId)) {
-            existing.push(bookingId);
-            localStorage.setItem('submittedMaterialUsage', JSON.stringify(existing));
-          }
+    if (!bookingId) return;
+    (async () => {
+      setLoading(true);
+      setLoadError('');
+      try {
+        const res = await fetchWithAuth(`/completion-reports/booking/${bookingId}/allocation`);
+        if (res?.error) {
+          setLoadError(res.error);
+          return;
         }
-        navigate('/staff/submission-success', {
-          state: {
-            id: serviceId.replace('CL-', '#SUB-'),
-            serviceType: serviceType,
-            date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-          }
-        });
-      } else {
-        alert('Draft saved successfully!');
-        navigate('/staff');
+        setBooking(res.booking);
+        setItems(
+          (res.items || []).map((i: any) => ({
+            sku: i.sku, name: i.name, unit: i.unit,
+            qtyAllocated: i.qtyAllocated,
+            qtyActualReported: i.qtyAllocated,
+          }))
+        );
+      } catch (err) {
+        console.error('Failed to load allocation:', err);
+        setLoadError('Unable to load allocated materials. Please try again.');
+      } finally {
+        setLoading(false);
       }
-    }, 1000);
+    })();
+  }, [bookingId]);
+
+  const updateQty = (sku: string, value: number) => {
+    setItems(prev => prev.map(i => i.sku === sku ? { ...i, qtyActualReported: Math.max(0, value) } : i));
   };
 
-  const equipment = items.filter(i => i.type === 'equipment');
-  const materials = items.filter(i => i.type === 'material');
+  const handleSubmit = async () => {
+    if (!bookingId) return;
+    setIsSubmitting(true);
+    setSubmitError('');
+    try {
+      const res = await fetchWithAuth(`/completion-reports/booking/${bookingId}`, {
+        method: 'POST',
+        body: JSON.stringify({ items: items.map(i => ({ sku: i.sku, qty: i.qtyActualReported })) }),
+      });
+      if (res?.error) {
+        setSubmitError(res.error);
+        return;
+      }
+      navigate('/staff/submission-success', {
+        state: {
+          id: booking?.bookingRef || bookingId,
+          serviceType: booking?.serviceType || '',
+          date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        },
+      });
+    } catch (err) {
+      console.error('Failed to submit completion report:', err);
+      setSubmitError('Unable to submit material usage. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-24">
       <div className="bg-white border-b sticky top-0 z-30 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-          <button 
+          <button
             onClick={() => navigate(-1)}
             className="flex items-center text-slate-600 hover:text-purple-600 font-medium transition-colors"
           >
             <ChevronLeft className="w-5 h-5 mr-1" />
             Back
           </button>
-          <div className="flex items-center gap-3">
-            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-emerald-200 px-3 py-1 font-semibold rounded-full">
-              <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
-              Completed
-            </Badge>
-          </div>
+          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-emerald-200 px-3 py-1 font-semibold rounded-full">
+            <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+            Completed
+          </Badge>
         </div>
       </div>
 
       <div className="max-w-4xl mx-auto px-4 mt-8">
         <div className="mb-10">
-          <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Complete Service</h1>
-          <p className="text-slate-500 mt-2 text-lg">Record inventory and equipment used for the final service report.</p>
+          <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Record Material Usage</h1>
+          <p className="text-slate-500 mt-2 text-lg">Report how much of each allocated material was actually used.</p>
         </div>
 
-        <form className="space-y-8" onSubmit={(e) => e.preventDefault()}>
-          <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white rounded-2xl overflow-hidden">
-            <div className="h-2 bg-purple-600 w-full" />
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xl text-slate-800">Service Overview</CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Service ID</Label>
-                  <Input value={serviceId} readOnly className="bg-slate-50 border-slate-200 font-mono text-purple-700 font-bold h-12" />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Client Name</Label>
-                  <Input value={clientName} readOnly className="bg-slate-50 border-slate-200 font-semibold h-12" />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Service Type</Label>
-                  <Select value={serviceType} onValueChange={setServiceType}>
-                    <SelectTrigger className="border-slate-200 h-12 bg-white hover:border-purple-300">
-                      <SelectValue placeholder="Select service type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(SERVICE_CONFIGS).map(type => (
-                        <SelectItem key={type} value={type}>{type}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Completion Date</Label>
-                  <div className="relative">
-                    <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border-slate-200 h-12 bg-white pl-11" />
-                    <CalendarIcon className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  </div>
-                </div>
+        {loading && (
+          <div className="flex items-center justify-center py-24 text-slate-400">
+            <Loader2 className="w-6 h-6 animate-spin mr-2" /> Loading allocated materials...
+          </div>
+        )}
+
+        {!loading && loadError && (
+          <Card className="border-none shadow-sm bg-amber-50 rounded-2xl">
+            <CardContent className="p-8 flex items-start gap-4">
+              <AlertTriangle className="w-6 h-6 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-amber-800">{loadError}</p>
+                <Button variant="outline" onClick={() => navigate('/staff')} className="mt-4">Back to Dashboard</Button>
               </div>
             </CardContent>
           </Card>
+        )}
 
-          {/* Equipment Section */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between px-2">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                  <Wrench className="w-5 h-5 text-blue-600" />
+        {!loading && !loadError && (
+          <div className="space-y-8">
+            <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white rounded-2xl overflow-hidden">
+              <div className="h-2 bg-purple-600 w-full" />
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xl text-slate-800">Service Overview</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Booking Reference</Label>
+                    <Input value={booking?.bookingRef || ''} readOnly className="bg-slate-50 border-slate-200 font-mono text-purple-700 font-bold h-12" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Client Name</Label>
+                    <Input value={booking?.customerName || ''} readOnly className="bg-slate-50 border-slate-200 font-semibold h-12" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Service Type</Label>
+                    <Input value={booking?.serviceType || ''} readOnly className="bg-slate-50 border-slate-200 font-semibold h-12" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Scheduled Date</Label>
+                    <Input value={booking?.scheduledDate || ''} readOnly className="bg-slate-50 border-slate-200 font-semibold h-12" />
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Equipment Used</h2>
-                  <p className="text-slate-500 text-sm">Verify all tools and machinery used</p>
-                </div>
-              </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => addItem('equipment')} className="border-blue-200 text-blue-700 hover:bg-blue-50 h-10 px-4 rounded-xl shadow-sm">
-                <Plus className="w-4 h-4 mr-2" /> Add Equipment
-              </Button>
-            </div>
-            <div className="space-y-3">
-              {equipment.map((item) => (
-                <ItemCard key={item.id} item={item} onToggle={() => toggleItem(item.id)} onChange={handleItemChange} onRemove={() => removeItem(item.id)} />
-              ))}
-            </div>
-          </div>
+              </CardContent>
+            </Card>
 
-          {/* Materials Section */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between px-2">
-              <div className="flex items-center gap-2.5">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2.5 px-2">
                 <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
                   <Droplets className="w-5 h-5 text-purple-600" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Consumables & Materials</h2>
-                  <p className="text-slate-500 text-sm">Quantities used will be deducted from inventory</p>
+                  <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Materials Allocated</h2>
+                  <p className="text-slate-500 text-sm">Adjust the quantity actually used — defaults to what was allocated</p>
                 </div>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => addItem('material')} className="border-purple-200 text-purple-700 hover:bg-purple-50 h-10 px-4 rounded-xl shadow-sm">
-                <Plus className="w-4 h-4 mr-2" /> Add Material
+
+              {items.length === 0 ? (
+                <p className="text-slate-400 text-center py-10">No materials were allocated for this booking.</p>
+              ) : (
+                <div className="space-y-3">
+                  {items.map(item => (
+                    <Card key={item.sku} className="border-none shadow-sm ring-1 ring-slate-100 overflow-hidden">
+                      <CardContent className="p-0">
+                        <div className="flex flex-col md:flex-row md:items-center p-4 gap-4">
+                          <div className="flex-1">
+                            <div className="font-bold text-slate-800 text-lg">{item.name}</div>
+                            <div className="flex items-center gap-3 mt-1">
+                              <span className="text-xs font-mono text-slate-400">{item.sku}</span>
+                              <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-blue-50 text-blue-500">
+                                Allocated: {item.qtyAllocated} {item.unit}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center bg-slate-50 rounded-xl border border-slate-200 p-1">
+                            <Input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={item.qtyActualReported}
+                              onChange={(e) => updateQty(item.sku, parseFloat(e.target.value) || 0)}
+                              className="w-24 text-center border-none bg-transparent font-bold text-slate-800 h-10 focus-visible:ring-0"
+                            />
+                            <span className="px-3 text-sm font-medium text-slate-500">{item.unit} used</span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {submitError && (
+              <div className="bg-red-50 text-red-700 px-4 py-3 rounded-xl text-sm font-medium">{submitError}</div>
+            )}
+
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-4 pt-6">
+              <button type="button" onClick={() => navigate(-1)} className="text-slate-400 hover:text-slate-600 font-bold text-sm uppercase tracking-widest px-6 py-3">Cancel</button>
+              <Button
+                onClick={handleSubmit}
+                disabled={isSubmitting || items.length === 0}
+                className="w-full sm:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold h-14 px-10 rounded-2xl shadow-[0_10px_30px_rgb(37,99,235,0.3)] text-lg"
+              >
+                {isSubmitting ? 'Submitting...' : 'Submit Material Usage'}
               </Button>
             </div>
-            <div className="space-y-3">
-              {materials.map((item) => (
-                <ItemCard key={item.id} item={item} onToggle={() => toggleItem(item.id)} onChange={handleItemChange} onRemove={() => removeItem(item.id)} />
-              ))}
-            </div>
           </div>
-
-          <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white rounded-2xl overflow-hidden">
-            <CardHeader className="border-b border-slate-50">
-              <CardTitle className="text-xl text-slate-800">Additional Information</CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 space-y-8">
-              <div className="space-y-3">
-                <Label className="text-sm font-bold text-slate-700">Service Notes</Label>
-                <Textarea placeholder="Add any specific details about the service performed or materials used..." className="min-h-[140px] border-slate-200 rounded-xl" value={notes} onChange={(e) => setNotes(e.target.value)} />
-              </div>
-              <div className="space-y-3">
-                <Label className="text-sm font-bold text-slate-700">Photo Evidence</Label>
-                <div className="border-2 border-dashed border-slate-200 rounded-2xl p-10 text-center hover:border-purple-400 hover:bg-purple-50/50 transition-all cursor-pointer group bg-slate-50/50">
-                  <UploadCloud className="w-8 h-8 text-purple-600 mx-auto mb-4" />
-                  <p className="text-base font-bold text-slate-700 mb-1">Upload Completion Photos</p>
-                  <p className="text-sm text-slate-400">Drag and drop or click to browse (Max 5 photos)</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="flex flex-col sm:flex-row items-center justify-end gap-4 pt-10">
-            <button type="button" onClick={() => navigate(-1)} className="text-slate-400 hover:text-slate-600 font-bold text-sm uppercase tracking-widest px-6 py-3">Cancel</button>
-            <Button variant="outline" onClick={() => handleSubmit('draft')} className="w-full sm:w-auto border-slate-200 text-slate-600 h-14 px-8 rounded-2xl" disabled={isSubmitting}>
-              <Save className="w-5 h-5 mr-2.5" /> Save as Draft
-            </Button>
-            <Button onClick={() => handleSubmit('submitted')} className="w-full sm:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold h-14 px-10 rounded-2xl shadow-[0_10px_30px_rgb(37,99,235,0.3)] text-lg" disabled={isSubmitting}>
-              {isSubmitting ? 'Processing...' : 'Submit for Approval'}
-            </Button>
-          </div>
-        </form>
+        )}
       </div>
     </div>
-  );
-}
-
-function ItemCard({ item, onToggle, onChange, onRemove }: { 
-  item: MaterialItem, 
-  onToggle: () => void, 
-  onChange: (id: string, field: keyof MaterialItem, value: any) => void,
-  onRemove: () => void
-}) {
-  return (
-    <Card className={`border-none shadow-sm transition-all duration-200 overflow-hidden ${item.selected ? 'bg-white ring-1 ring-slate-100' : 'bg-slate-50 grayscale opacity-60'}`}>
-      <CardContent className="p-0">
-        <div className="flex flex-col md:flex-row md:items-center p-4 gap-5">
-          <div className="flex items-center gap-4 flex-1">
-            <Checkbox checked={item.selected} onCheckedChange={onToggle} className="w-5 h-5 rounded-md" />
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center gap-2">
-                <Input 
-                  value={item.name} 
-                  onChange={(e) => onChange(item.id, 'name', e.target.value)}
-                  className="border-none bg-transparent font-bold text-slate-800 text-lg p-0 h-auto focus-visible:ring-0 w-full"
-                  disabled={!item.selected}
-                  placeholder="Enter name..."
-                />
-                {item.lowStock && <AlertTriangle className="w-5 h-5 text-orange-500 shrink-0" />}
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="text-xs font-medium text-slate-400">Default: {item.defaultQty} {item.unit}</span>
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-md ${item.lowStock ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-500'}`}>
-                  Stock: {item.stock} {item.unit}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center bg-slate-50 rounded-xl border border-slate-200 p-1">
-              <Input 
-                type="number" 
-                value={item.quantity} 
-                onChange={(e) => onChange(item.id, 'quantity', parseFloat(e.target.value))}
-                className="w-20 text-center border-none bg-transparent font-bold text-slate-800 h-10 focus-visible:ring-0"
-                disabled={!item.selected}
-                step="0.1"
-              />
-              <div className="h-6 w-px bg-slate-200 mx-1" />
-              <Select value={item.unit} onValueChange={(val) => onChange(item.id, 'unit', val)} disabled={!item.selected}>
-                <SelectTrigger className="w-28 border-none bg-transparent font-medium text-slate-600 h-10 focus:ring-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl">
-                  <SelectItem value="liters">liters</SelectItem>
-                  <SelectItem value="pieces">pieces</SelectItem>
-                  <SelectItem value="pairs">pairs</SelectItem>
-                  <SelectItem value="kg">kg</SelectItem>
-                  <SelectItem value="ml">ml</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button variant="ghost" size="icon" onClick={onRemove} className="text-slate-300 hover:text-red-500 transition-colors">
-              <Trash2 className="w-5 h-5" />
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
