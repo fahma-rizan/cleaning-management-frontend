@@ -30,6 +30,7 @@ const EmailTemplates = lazy(() => import("../components/EmailTemplates"));
 const StaffInvoicePage = lazy(() => import("../components/StaffInvoicePage"));
 const StaffInvoiceViewer = lazy(() => import("../components/StaffInvoiceViewer"));
 const FinancialDashboard = lazy(() => import("../components/admin/FinancialDashboard"));
+const AdminRequestsPage = lazy(() => import("../components/admin/AdminRequestsPage"));
 const PaymentLinkPage = lazy(() => import("../components/PaymentLinkPage"));
 const BalancePaymentPage = lazy(() => import("../components/BalancePaymentPage"));
 const AnalyticsDashboard = lazy(() => import("../components/AnalyticsDashboard"));
@@ -131,6 +132,8 @@ function BillingContent() {
           <Route path="staff-invoice/:invoiceNumber" element={<StaffInvoiceViewer user={currentUser} />} />
           <Route path="staff/invoice-viewer" element={<StaffInvoiceViewer user={currentUser} />} />
           <Route path="admin/financial-dashboard" element={<FinancialDashboard user={currentUser} />} />
+          <Route path="admin/refunds" element={<AdminRequestsPage user={currentUser} kind="refunds" />} />
+          <Route path="admin/price-reductions" element={<AdminRequestsPage user={currentUser} kind="price-reductions" />} />
           <Route
             path="admin/analytics"
             element={

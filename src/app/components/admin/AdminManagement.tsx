@@ -373,6 +373,7 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
 
       {/* Admin Table */}
       <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-visible">
+        <div className="overflow-x-auto">
         <table className="w-full text-left">
           <thead>
             <tr className="bg-gray-50/50 border-b border-gray-100">
@@ -532,6 +533,7 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
             ))}
           </tbody>
         </table>
+        </div>
         {filteredAdmins.length === 0 && (
           <div className="p-20 text-center">
             <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">

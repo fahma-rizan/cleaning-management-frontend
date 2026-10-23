@@ -174,6 +174,46 @@ export default function PaymentSuccessPage({ user, onLogout, theme, onToggleThem
               </div>
             </div>
 
+            {booking.pointsEarned > 0 && (
+              <div className={`rounded-lg p-4 mb-6 flex items-center justify-center gap-2 font-semibold ${theme === 'dark' ? 'bg-purple-900/30 text-purple-300' : 'bg-purple-50 text-purple-700'}`}>
+                🎉 You earned {booking.pointsEarned.toLocaleString()} loyalty points!
+              </div>
+            )}
+
+            {(booking.tierDiscountApplied || booking.pointsRedeemed > 0) && (
+              <div className={`rounded-lg p-6 mb-6 text-left ${theme === 'dark' ? 'bg-gray-700' : 'bg-green-50'}`}>
+                <p className={`text-sm font-bold uppercase tracking-wide mb-3 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'}`}>Loyalty Savings</p>
+                <div className="grid grid-cols-2 gap-4">
+                  {booking.tierDiscountApplied && (
+                    <div>
+                      <p className={`text-sm mb-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Tier Discount</p>
+                      <p className="text-green-600">Rs. {(booking.tierDiscountAmount || 0).toLocaleString()}</p>
+                    </div>
+                  )}
+                  {booking.pointsRedeemed > 0 && (
+                    <>
+                      <div>
+                        <p className={`text-sm mb-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Loyalty Points Redeemed</p>
+                        <p>{booking.pointsRedeemed.toLocaleString()} pts</p>
+                      </div>
+                      <div>
+                        <p className={`text-sm mb-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Loyalty Discount</p>
+                        <p className="text-green-600">Rs. {(booking.pointsDiscountAmount || 0).toLocaleString()}</p>
+                      </div>
+                      {booking.remainingLoyaltyBalance != null && (
+                        <div>
+                          <p className={`text-sm mb-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Remaining Loyalty Points</p>
+                          {/* remainingLoyaltyBalance is the balance right after redemption — this
+                              same payment then earned pointsEarned on top of it, so reflect that too */}
+                          <p>{(booking.remainingLoyaltyBalance + (booking.pointsEarned || 0)).toLocaleString()} pts</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-3">
               <button
                 onClick={() => setShowInvoice(true)}

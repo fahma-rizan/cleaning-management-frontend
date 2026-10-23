@@ -164,9 +164,9 @@ export default function App() {
               }
             />
             
-            <Route path="register" element={<RefinedRegister />} />
+            <Route path="register" element={<RefinedRegister onLogin={handleLogin} />} />
             <Route path="role-selection" element={<RoleSelection />} />
-            <Route path="register/customer" element={<RefinedRegister />} />
+            <Route path="register/customer" element={<RefinedRegister onLogin={handleLogin} />} />
             <Route path="register/staff" element={<StaffApplication />} />
             <Route path="register/admin" element={<RegisterAdmin />} />
             <Route path="complete-profile" element={<CompleteProfile />} />

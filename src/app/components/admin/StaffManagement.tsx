@@ -131,8 +131,6 @@ export function StaffManagement() {
   const handleSaveStaff = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const isCreating = view === "add" || !editingStaff;
-
     // Basic validation
     if (
       !formData.photo ||
@@ -360,6 +358,11 @@ export function StaffManagement() {
                   setFormData({ ...formData, email: e.target.value })
                 }
               />
+            </div>
+            <div className="space-y-2 sm:col-span-2 p-3 bg-purple-50 border border-purple-100 rounded-xl text-xs text-purple-800">
+              A secure temporary password will be generated automatically and
+              emailed to this staff member — they'll be required to set their
+              own password the first time they log in.
             </div>
             <div className="space-y-2">
               <label className="text-sm font-semibold text-gray-700">

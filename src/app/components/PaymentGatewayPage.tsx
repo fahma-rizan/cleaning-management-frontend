@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
 import { CreditCard, Smartphone, Building2, CheckCircle, ArrowLeft, Shield } from 'lucide-react';
 import Header from './Header';
+import { fetchWithAuth } from '../utils/api';
 import type { User } from '../types';
 
 interface PaymentGatewayPageProps {
@@ -153,7 +155,7 @@ export default function PaymentGatewayPage({ user, onLogout, theme, onToggleThem
     return false;
   };
 
-  const handlePayment = () => {
+  const handlePayment = async () => {
     if (!canProceed()) {
       alert('Please fill in all required fields');
       return;
@@ -169,111 +171,155 @@ export default function PaymentGatewayPage({ user, onLogout, theme, onToggleThem
 
     setProcessing(true);
 
-    // Simulate payment processing (3-5 seconds)
-    setTimeout(() => {
-      // Generate invoice data
-      const now = new Date();
-      const date = new Date();
-      const dateStr = date.toISOString().split('T')[0].replace(/-/g, '');
-      const serviceCode = bookingData?.serviceType?.substring(0, 3).toUpperCase() || 'SRV';
-      const randomNum = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
-      const invoiceNumber = `INV-${serviceCode}-${dateStr}-${randomNum}`;
-      
-      const paidAmount = amount;
-      const balanceAmount = paymentMethod === 'full-online' ? 0 : (bookingData.price || 0) - amount;
-      
-      console.log('Creating invoice with data:', {
-        bookingData,
-        paymentMethod,
-        paidAmount,
-        balanceAmount
+    // Simulate the card/wallet/bank gateway's own processing delay — this is
+    // still a sandbox simulation (no real PayHere/card network round-trip),
+    // but unlike before, the booking + payment it "confirms" is now actually
+    // saved to the backend below, not just faked into localStorage.
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0].replace(/-/g, '');
+    const serviceCode = bookingData?.serviceType?.substring(0, 3).toUpperCase() || 'SRV';
+    const randomNum = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+    const invoiceNumber = `INV-${serviceCode}-${dateStr}-${randomNum}`;
+
+    const paidAmount = amount;
+    const balanceAmount = paymentMethod === 'full-online' ? 0 : (bookingData.price || 0) - amount;
+    const gatewayLabel = selectedGateway === 'card' ? 'Credit/Debit Card'
+      : selectedGateway === 'mobile-wallet' ? `Mobile Wallet (${selectedWallet})`
+      : `Online Banking (${selectedBank})`;
+
+    // FIX: this used to only ever write fake data to localStorage and jump
+    // straight to the "Payment Successful" screen — the booking was never
+    // actually saved to the backend, so nothing existed for the server to
+    // award loyalty points against (or for staff/admin to ever see). Now it
+    // really creates the booking, with schema-valid paymentMethod/
+    // paymentStatus values (the old 'advance-paid' status and gateway label
+    // like "Credit/Debit Card" as paymentMethod were both invalid enum
+    // values the backend would have rejected anyway).
+    const completedBooking = {
+      ...bookingData,
+      status: 'confirmed',
+      paymentMethod, // 'full-online' | 'advance-balance' — matches Booking schema enum
+      paymentStatus: balanceAmount > 0 ? 'partial' : 'paid',
+      paidAmount,
+      balanceAmount,
+      bookingDate: now.toISOString(),
+    };
+
+    let savedBooking: any = null;
+    let pointsEarned = 0;
+    try {
+      const result = await fetchWithAuth('/bookings', {
+        method: 'POST',
+        body: JSON.stringify(completedBooking),
       });
-      
-      const invoiceData = {
-        invoiceNumber,
-        invoiceType: paymentMethod === 'full-online' ? 'full' : 'advance',
-        date: now.toLocaleDateString(),
-        time: now.toLocaleTimeString(),
-        bookingId: bookingData.bookingId || 'N/A',
-        customer: {
-          name: bookingData.customerName || user.name || 'Customer',
-          email: bookingData.customerEmail || user.email || 'N/A',
-          phone: bookingData.customerPhone || user.phone || 'N/A',
-          address: bookingData.address || 'N/A',
-        },
-        service: {
-          name: bookingData.serviceType || 'Service',
-          date: bookingData.date || 'N/A',
-          time: bookingData.time || 'N/A',
-          customizations: bookingData.customizations || [],
-        },
-        pricing: {
-          basePrice: bookingData.price || 0,
-          customizationTotal: 0,
-          discount: 0,
-          tax: 0,
-          transportCharge: 0,
-          total: bookingData.price || 0,
-          paidAmount,
-          balanceAmount,
-        },
-        paymentMethod: selectedGateway === 'card' ? 'Credit/Debit Card' 
-          : selectedGateway === 'mobile-wallet' ? `Mobile Wallet (${selectedWallet})` 
-          : `Online Banking (${selectedBank})`,
-        status: balanceAmount > 0 ? 'partial' : 'paid',
-      };
-      
-      // Store invoice
-      const existingInvoices = JSON.parse(localStorage.getItem('userInvoices') || '[]');
-      existingInvoices.push(invoiceData);
-      localStorage.setItem('userInvoices', JSON.stringify(existingInvoices));
-      
-      // Update booking status
-      const completedBooking = {
-        ...bookingData,
-        status: 'confirmed',
-        paymentStatus: balanceAmount > 0 ? 'advance-paid' : 'paid',
+      if (!result.success) {
+        console.error('Booking API error:', result.message);
+        toast.error(result.message || 'Could not confirm your booking. Please choose a different date/time and try again.');
+        setProcessing(false);
+        return;
+      }
+      savedBooking = result.booking;
+      console.log('✅ Booking saved to database:', savedBooking?.bookingId);
+
+      // Loyalty points are awarded automatically, server-side, as part of
+      // creating this already-paid booking — the response carries the
+      // result. Errors are surfaced (not swallowed): "payment succeeded but
+      // points never showed up" has no other way to be noticed.
+      if (paidAmount > 0) {
+        if (result.loyalty?.earned > 0) {
+          pointsEarned = result.loyalty.earned;
+          toast.success(`🎉 You earned ${pointsEarned} loyalty points!`);
+        } else if (!result.loyalty) {
+          console.error('Booking response carried no loyalty result for a paid booking.');
+          toast.error('Payment confirmed, but we could not confirm your loyalty points — please contact support.');
+        }
+      }
+    } catch (err) {
+      console.error('Booking save failed:', err);
+      toast.error('Could not confirm your booking. Please check your connection and try again.');
+      setProcessing(false);
+      return;
+    }
+
+    const invoiceData = {
+      invoiceNumber,
+      invoiceType: paymentMethod === 'full-online' ? 'full' : 'advance',
+      date: now.toLocaleDateString(),
+      time: now.toLocaleTimeString(),
+      bookingId: savedBooking?.bookingId || bookingData.bookingId || 'N/A',
+      customer: {
+        name: bookingData.customerName || user.name || 'Customer',
+        email: bookingData.customerEmail || user.email || 'N/A',
+        phone: bookingData.customerPhone || user.phone || 'N/A',
+        address: bookingData.address || 'N/A',
+      },
+      service: {
+        name: bookingData.serviceType || 'Service',
+        date: bookingData.date || 'N/A',
+        time: bookingData.time || 'N/A',
+        customizations: bookingData.customizations || [],
+      },
+      pricing: {
+        basePrice: bookingData.price || 0,
+        customizationTotal: 0,
+        discount: 0,
+        tax: 0,
+        transportCharge: 0,
+        total: bookingData.price || 0,
         paidAmount,
         balanceAmount,
-        paymentMethod: invoiceData.paymentMethod,
-        invoiceNumber,
-      };
-      
-      console.log('Completed booking:', completedBooking);
-      console.log('Invoice data:', invoiceData);
-      
-      // Store booking
-      const existingBookings = JSON.parse(localStorage.getItem('userBookings') || '[]');
-      existingBookings.push(completedBooking);
-      localStorage.setItem('userBookings', JSON.stringify(existingBookings));
-      
-      // Store payment success data temporarily for the success page
-      const successData = {
-        booking: completedBooking,
+      },
+      paymentMethod: gatewayLabel,
+      status: balanceAmount > 0 ? 'partial' : 'paid',
+    };
+
+    // Store invoice (local cache only — display purposes)
+    const existingInvoices = JSON.parse(localStorage.getItem('userInvoices') || '[]');
+    existingInvoices.push(invoiceData);
+    localStorage.setItem('userInvoices', JSON.stringify(existingInvoices));
+
+    // Loyalty fields are display-only here (the redemption itself was already
+    // confirmed by the backend at /loyalty/redeem, before this booking was
+    // created) — pinned from completedBooking explicitly so the success
+    // screen shows exactly what the customer saw at checkout, regardless of
+    // whether the saved booking document round-trips these same field names.
+    const displayBooking = {
+      ...completedBooking,
+      ...savedBooking,
+      invoiceNumber,
+      paymentMethod: gatewayLabel,
+      tierDiscountApplied: completedBooking.tierDiscountApplied,
+      tierDiscountAmount: completedBooking.tierDiscountAmount,
+      pointsRedeemed: completedBooking.pointsRedeemed,
+      pointsDiscountAmount: completedBooking.pointsDiscountAmount,
+      remainingLoyaltyBalance: completedBooking.remainingLoyaltyBalance,
+      pointsEarned,
+    };
+
+    // Keep a local cache too, same as the rest of the app already does.
+    const existingBookings = JSON.parse(localStorage.getItem('userBookings') || '[]');
+    existingBookings.push(displayBooking);
+    localStorage.setItem('userBookings', JSON.stringify(existingBookings));
+    localStorage.removeItem('currentBooking');
+
+    const successData = {
+      booking: displayBooking,
+      invoice: invoiceData,
+      paymentMethod: paymentMethod,
+      timestamp: Date.now()
+    };
+    localStorage.setItem('paymentSuccessData', JSON.stringify(successData));
+
+    navigate('/payment-success', {
+      replace: true,
+      state: {
+        booking: displayBooking,
         invoice: invoiceData,
         paymentMethod: paymentMethod,
-        timestamp: Date.now()
-      };
-      
-      console.log('Storing paymentSuccessData:', successData);
-      localStorage.setItem('paymentSuccessData', JSON.stringify(successData));
-      
-      // Navigate to payment success page
-      console.log('Navigating to payment success with state:', {
-        booking: completedBooking,
-        invoice: invoiceData,
-        paymentMethod: paymentMethod,
-      });
-      
-      navigate('/payment-success', { 
-        replace: true,
-        state: { 
-          booking: completedBooking,
-          invoice: invoiceData,
-          paymentMethod: paymentMethod,
-        } 
-      });
-    }, 4000); // Changed to 4 seconds for more realistic processing time
+      }
+    });
   };
 
   // Payment Processing Overlay UI

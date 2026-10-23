@@ -180,32 +180,25 @@
   }
 }
 
+/* FIX: html/body/#root used to be hard-pinned to exactly 1512px
+   (min-width == max-width) — a leftover "MacBook Pro 14" frame" export
+   artifact. On any viewport narrower than that (i.e. almost every real
+   laptop, tablet, or phone) that forced a whole-page horizontal scrollbar,
+   since the page itself was wider than the window. Vertical scrolling was
+   never the issue — width was. These now size to the actual viewport
+   instead of a fixed design-mock width. */
 html {
   font-size: var(--font-size);
-  min-width: 1512px;
-  max-width: 1512px;
-  margin: 0 auto;
-  overflow-x: auto;
+  width: 100%;
 }
 
 body {
-  min-width: 1512px;
-  max-width: 1512px;
-  margin: 0 auto;
-  overflow-x: auto;
+  width: 100%;
 }
 
 #root {
-  min-width: 1512px;
-  max-width: 1512px;
-  margin: 0 auto;
-}
-
-/* MacBook Pro 14" Frame Container */
-.app-container {
-  width: 1512px;
-  min-height: 982px;
-  margin: 0 auto;
+  width: 100%;
+  min-height: 100vh;
 }
 
 /* React DatePicker Custom Styling for Purple Theme */

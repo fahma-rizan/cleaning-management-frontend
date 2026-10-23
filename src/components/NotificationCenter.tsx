@@ -99,11 +99,11 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
 
     try {
       const accessToken = tokenStorage.getAccessToken();
-      await fetch(`${API_BASE_URL}/notifications/${notificationId}/read`, {
+      const response = await fetch(`${API_BASE_URL}/notifications/${notificationId}/read`, {
         method: 'PUT',
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
       });
-      // No need to refetch, UI is already updated
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
     } catch (error) {
       console.error("Error marking notification as read:", error);
       // Revert UI update on error
@@ -120,10 +120,11 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
 
     try {
       const accessToken = tokenStorage.getAccessToken();
-      await fetch(`${API_BASE_URL}/notifications/mark-all-read/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/notifications/mark-all-read/${userId}`, {
         method: 'PUT',
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
     } catch (error) {
       console.error("Error marking all notifications as read:", error);
       // Revert on error
@@ -137,10 +138,11 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
 
     try {
       const accessToken = tokenStorage.getAccessToken();
-      await fetch(`${API_BASE_URL}/notifications/user/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/notifications/user/${userId}`, {
         method: 'DELETE',
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
     } catch (error) {
       console.error("Error deleting all notifications:", error);
       setNotifications(originalNotifications);
@@ -154,10 +156,11 @@ export default function NotificationCenter({ userId }: NotificationCenterProps) 
 
     try {
       const accessToken = tokenStorage.getAccessToken();
-      await fetch(`${API_BASE_URL}/notifications/${notificationId}`, {
+      const response = await fetch(`${API_BASE_URL}/notifications/${notificationId}`, {
         method: 'DELETE',
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
     } catch (error) {
       console.error("Error deleting notification:", error);
       setNotifications(originalNotifications);

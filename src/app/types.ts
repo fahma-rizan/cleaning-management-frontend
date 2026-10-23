@@ -2,6 +2,8 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  phone?: string;
+  address?: string;
   role: 'customer' | 'admin' | 'cleaner' | 'staff';
   adminRole?: 'Super Admin' | 'Main Admin' | 'Operations Manager' | 'Customer Support';
   verified: boolean;

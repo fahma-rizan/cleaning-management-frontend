@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Camera, Save, User as UserProfileIcon } from 'lucide-react';
+import { useApp } from '../context';
 import type { User } from '../types';
 
 interface ProfileModalProps {
@@ -10,13 +11,31 @@ interface ProfileModalProps {
 }
 
 export default function ProfileModal({ user, isOpen, onClose, theme = 'light' }: ProfileModalProps) {
+  const { setUser } = useApp();
   const [profileData, setProfileData] = useState({
     name: user.name,
     email: user.email,
-    phone: localStorage.getItem('userPhone') || '',
-    address: localStorage.getItem('userAddress') || '',
+    phone: user.phone || '',
+    address: user.address || '',
     profilePicture: localStorage.getItem('userProfilePicture') || '',
   });
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Re-sync when the modal is reopened for a possibly-updated user, or for a
+  // different user (e.g. after logging in as someone else in the same tab).
+  useEffect(() => {
+    if (isOpen) {
+      setProfileData((prev) => ({
+        ...prev,
+        name: user.name,
+        email: user.email,
+        phone: user.phone || '',
+        address: user.address || '',
+      }));
+      setMessage(null);
+    }
+  }, [isOpen, user]);
 
   if (!isOpen) return null;
 
@@ -32,24 +51,41 @@ export default function ProfileModal({ user, isOpen, onClose, theme = 'light' }:
     }
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     localStorage.setItem('userProfilePicture', profileData.profilePicture);
-    localStorage.setItem('userPhone', profileData.phone);
-    localStorage.setItem('userAddress', profileData.address);
-    
-    // Update user data in localStorage
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      const userData = JSON.parse(storedUser);
-      userData.name = profileData.name;
-      userData.email = profileData.email;
-      localStorage.setItem('user', JSON.stringify(userData));
+    setIsSaving(true);
+    setMessage(null);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/auth/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        // Email is deliberately not sent — changing it needs re-verification,
+        // which this form doesn't do (see authController.updateProfile).
+        body: JSON.stringify({
+          name: profileData.name,
+          phone: profileData.phone,
+          address: profileData.address,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setUser(data.user);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        onClose();
+      } else {
+        setMessage({ type: 'error', text: data.message || 'Failed to update profile.' });
+      }
+    } catch (err) {
+      console.error('Update profile error:', err);
+      setMessage({ type: 'error', text: 'Cannot connect to server. Please try again.' });
+    } finally {
+      setIsSaving(false);
     }
-    
-    alert('Profile updated successfully!');
-    onClose();
-    // Reload to reflect changes
-    window.location.reload();
   };
 
   return (
@@ -112,9 +148,10 @@ export default function ProfileModal({ user, isOpen, onClose, theme = 'light' }:
               <input
                 type="email"
                 value={profileData.email}
-                onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                readOnly
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-100 dark:text-gray-400 text-gray-500 rounded-lg cursor-not-allowed"
               />
+              <p className="mt-1 text-xs text-gray-400">Contact support to change your email address.</p>
             </div>
 
             <div>
@@ -161,18 +198,30 @@ export default function ProfileModal({ user, isOpen, onClose, theme = 'light' }:
             </div>
           )}
 
+          {message && (
+            <div className={`px-4 py-3 rounded-xl text-sm font-medium ${
+              message.type === 'success'
+                ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+            }`}>
+              {message.text}
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4">
             <button
               onClick={handleSaveProfile}
-              className="flex-1 flex items-center justify-center gap-2 bg-purple-600 dark:bg-purple-700 text-white px-6 py-3 rounded-lg hover:bg-purple-700 dark:hover:bg-purple-800 transition-colors font-medium shadow-lg hover:shadow-xl"
+              disabled={isSaving}
+              className="flex-1 flex items-center justify-center gap-2 bg-purple-600 dark:bg-purple-700 text-white px-6 py-3 rounded-lg hover:bg-purple-700 dark:hover:bg-purple-800 transition-colors font-medium shadow-lg hover:shadow-xl disabled:opacity-50"
             >
               <Save className="w-5 h-5" />
-              Save Changes
+              {isSaving ? 'Saving...' : 'Save Changes'}
             </button>
             <button
               onClick={onClose}
-              className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-6 py-3 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors font-medium"
+              disabled={isSaving}
+              className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-6 py-3 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors font-medium disabled:opacity-50"
             >
               Cancel
             </button>

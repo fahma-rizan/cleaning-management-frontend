@@ -1,18 +1,16 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Award,
   History,
   Gift,
   Star,
-  TrendingUp,
-  Users,
   CheckCircle2,
   Clock,
   Sparkles,
-  MessageSquarePlus,
-  UserPlus,
-  User as UserIcon,
   Search,
+  Quote,
+  ArrowRight,
 } from 'lucide-react';
 import type { User } from '../types';
 import Header from './Header';
@@ -31,10 +29,13 @@ interface LoyaltyPageProps {
 interface Account {
   currentBalance: number;
   lifetimePoints: number;
+  loyaltyDebt: number;
   currentTier: string;
   discountPercent: number;
   discountAvailable: boolean;
-  tierDiscountsUsed: Record<string, boolean>;
+  tierPerksGranted: Record<string, boolean>;
+  tierPerksUsed: Record<string, boolean>;
+  earnedThisMonth: number;
 }
 
 interface Transaction {
@@ -47,13 +48,16 @@ interface Transaction {
 }
 
 export default function LoyaltyPage({ user, onLogout, theme, onToggleTheme, onProfileClick }: LoyaltyPageProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'tiers' | 'earn'>('overview');
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'tiers'>('overview');
   const [account, setAccount] = useState<Account | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [historyFilter, setHistoryFilter] = useState<'all' | Transaction['type']>('all');
   const [search, setSearch] = useState('');
+  const [reserving, setReserving] = useState(false);
+  const [reserveMessage, setReserveMessage] = useState('');
 
   const loadAll = async () => {
     try {
@@ -75,6 +79,24 @@ export default function LoyaltyPage({ user, onLogout, theme, onToggleTheme, onPr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleReserveDiscount = async () => {
+    setReserving(true);
+    setReserveMessage('');
+    try {
+      const data = await fetchWithAuth('/loyalty/tier-discount/apply', { method: 'POST', body: JSON.stringify({}) });
+      if (data?.applied) {
+        setReserveMessage(`✅ ${data.percent}% ${data.tier} tier discount reserved — it'll be applied at your next booking.`);
+        await loadAll();
+      } else {
+        setReserveMessage(`❌ ${data?.message || 'Could not reserve the discount.'}`);
+      }
+    } catch (err) {
+      setReserveMessage('❌ Failed to reserve the discount. Please try again.');
+    } finally {
+      setReserving(false);
+    }
+  };
+
   const tier = getTierByName(account?.currentTier);
   const nextTier = getNextTier(account?.currentTier);
   const lifetimePoints = account?.lifetimePoints ?? user.lifetimePoints ?? 0;
@@ -95,7 +117,6 @@ export default function LoyaltyPage({ user, onLogout, theme, onToggleTheme, onPr
     { id: 'overview', name: 'Overview', icon: Award },
     { id: 'history', name: 'History', icon: History },
     { id: 'tiers', name: 'Tiers', icon: Star },
-    { id: 'earn', name: 'Earn Points', icon: Sparkles },
   ] as const;
 
   const renderOverview = () => (
@@ -134,7 +155,7 @@ export default function LoyaltyPage({ user, onLogout, theme, onToggleTheme, onPr
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-purple-100 dark:border-purple-900/30 shadow-sm">
           <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-2">Redeemable Balance</p>
           <p className="text-3xl font-black text-gray-900 dark:text-white">{balance.toLocaleString()}</p>
@@ -146,21 +167,49 @@ export default function LoyaltyPage({ user, onLogout, theme, onToggleTheme, onPr
           <p className="text-xs text-gray-400 mt-1">determines your tier permanently</p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-purple-100 dark:border-purple-900/30 shadow-sm">
+          <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-2">Earned This Month</p>
+          <p className="text-3xl font-black text-gray-900 dark:text-white">{(account?.earnedThisMonth ?? 0).toLocaleString()}</p>
+          <p className="text-xs text-gray-400 mt-1">points from paid bookings</p>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-purple-100 dark:border-purple-900/30 shadow-sm">
           <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-2">Earning Rate</p>
           <p className="text-3xl font-black text-gray-900 dark:text-white">{tier.earningRate}x</p>
           <p className="text-xs text-gray-400 mt-1">points per Rs. 100 spent</p>
         </div>
       </div>
 
-      {account?.discountAvailable && (
-        <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30 rounded-2xl p-6 flex items-center gap-4">
-          <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl">
-            <Gift className="w-6 h-6 text-green-600" />
+      {!!account?.loyaltyDebt && (
+        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 rounded-2xl p-6 flex items-center gap-4">
+          <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-xl">
+            <Clock className="w-6 h-6 text-amber-600" />
           </div>
           <div>
-            <p className="font-bold text-green-800 dark:text-green-300">A {account.discountPercent}% tier discount is reserved for your next booking</p>
-            <p className="text-sm text-green-700/80 dark:text-green-400/80">It will be applied automatically at checkout.</p>
+            <p className="font-bold text-amber-800 dark:text-amber-300">{account.loyaltyDebt.toLocaleString()} pts loyalty debt outstanding</p>
+            <p className="text-sm text-amber-700/80 dark:text-amber-400/80">
+              A previously-redeemed booking was cancelled — future earned points repay this before adding to your balance, and redemption is paused until it's cleared.
+            </p>
           </div>
+        </div>
+      )}
+
+      {account?.discountAvailable && (
+        <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl w-fit">
+            <Gift className="w-6 h-6 text-green-600" />
+          </div>
+          <div className="flex-1">
+            <p className="font-bold text-green-800 dark:text-green-300">A {account.discountPercent}% one-time {tier.name} tier discount is available</p>
+            <p className="text-sm text-green-700/80 dark:text-green-400/80">Reserve it now and it'll be applied to your next booking's total.</p>
+            {reserveMessage && <p className="text-sm mt-2 font-semibold text-green-800 dark:text-green-300">{reserveMessage}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={handleReserveDiscount}
+            disabled={reserving}
+            className="shrink-0 px-5 py-3 rounded-xl bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-bold text-sm transition-colors"
+          >
+            {reserving ? 'Reserving…' : 'Reserve Discount'}
+          </button>
         </div>
       )}
 
@@ -168,26 +217,24 @@ export default function LoyaltyPage({ user, onLogout, theme, onToggleTheme, onPr
         <h3 className="font-bold text-gray-900 dark:text-white mb-4">How redeeming works</h3>
         <ul className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
           <li className="flex items-start gap-3"><CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" /> Every Rs. 100 spent earns {tier.earningRate} point{tier.earningRate === 1 ? '' : 's'} at your current tier.</li>
-          <li className="flex items-start gap-3"><CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" /> Minimum 100 points required to redeem — 1 point = Rs. 1 discount.</li>
+          <li className="flex items-start gap-3"><CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" /> You must have more than 100 points to redeem, and always keep at least 100 in your balance — up to 500 points per booking. 1 point = Rs. 1 discount.</li>
           <li className="flex items-start gap-3"><CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" /> Each tier unlocks a one-time bonus discount the first time you reach it.</li>
         </ul>
       </div>
 
-      <div>
-        <h3 className="font-bold text-gray-900 dark:text-white mb-4">Your Tier Benefits</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {[
-            `${tier.earningRate}x points on every booking`,
-            tier.discount > 0 ? `${Math.round(tier.discount * 100)}% one-time tier discount` : 'Start earning toward Silver',
-            'Priority customer support',
-            'Access to member-only offers',
-          ].map((b, i) => (
-            <div key={i} className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl px-4 py-3">
-              <CheckCircle2 className="w-4 h-4 text-purple-600 shrink-0" />
-              <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">{b}</span>
-            </div>
-          ))}
-        </div>
+      <div className="relative overflow-hidden bg-gradient-to-br from-purple-600 to-purple-800 rounded-2xl p-8 text-center shadow-sm">
+        <Quote className="w-8 h-8 text-purple-300 mx-auto mb-3" />
+        <p className="text-lg sm:text-xl font-semibold text-white max-w-xl mx-auto leading-relaxed">
+          "Every booking brings you closer to your next reward."
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate('/services')}
+          className="mt-6 inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-purple-700 font-bold text-sm hover:bg-purple-50 transition-colors shadow-lg"
+        >
+          Book a New Service
+          <ArrowRight className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );
@@ -325,48 +372,6 @@ export default function LoyaltyPage({ user, onLogout, theme, onToggleTheme, onPr
     </div>
   );
 
-  const renderEarn = () => {
-    const ways = [
-      { icon: Award, title: 'Book a Service', desc: `Earn ${tier.earningRate} point${tier.earningRate === 1 ? '' : 's'} for every Rs. 100 you spend, automatically credited when payment is confirmed.`, color: 'purple' },
-      { icon: MessageSquarePlus, title: 'Leave a Review', desc: 'Share feedback on a completed booking to earn bonus points.', color: 'blue' },
-      { icon: UserPlus, title: 'Refer a Friend', desc: 'Invite friends to Cloud Laundry — you both earn rewards when they book.', color: 'green' },
-      { icon: UserIcon, title: 'Complete Your Profile', desc: 'Fill in your profile details for a one-time points bonus.', color: 'amber' },
-    ];
-    const colorMap: Record<string, string> = {
-      purple: 'bg-purple-50 text-purple-600 dark:bg-purple-900/30',
-      blue: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30',
-      green: 'bg-green-50 text-green-600 dark:bg-green-900/30',
-      amber: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30',
-    };
-    return (
-      <div className="space-y-8 animate-in fade-in duration-500">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {ways.map((w, i) => (
-            <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-purple-100 dark:border-purple-900/30 shadow-sm flex gap-4">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${colorMap[w.color]}`}>
-                <w.icon className="w-6 h-6" />
-              </div>
-              <div>
-                <h4 className="font-bold mb-1 dark:text-white">{w.title}</h4>
-                <p className="text-sm text-gray-500">{w.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="bg-gradient-to-br from-purple-600 to-purple-800 rounded-3xl p-10 text-center text-white relative overflow-hidden">
-          <div className="relative z-10">
-            <Users className="w-14 h-14 mx-auto mb-4 text-purple-200" />
-            <h2 className="text-3xl font-black mb-3">Every booking brings you closer to the next tier</h2>
-            <p className="opacity-90 max-w-xl mx-auto flex items-center justify-center gap-2">
-              <TrendingUp className="w-4 h-4" /> Keep booking to unlock faster earning rates and bigger discounts.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FDFCFE] dark:bg-gray-900 flex items-center justify-center">
@@ -415,7 +420,6 @@ export default function LoyaltyPage({ user, onLogout, theme, onToggleTheme, onPr
             {activeTab === 'overview' && renderOverview()}
             {activeTab === 'history' && renderHistory()}
             {activeTab === 'tiers' && renderTiers()}
-            {activeTab === 'earn' && renderEarn()}
           </div>
         </div>
       </main>

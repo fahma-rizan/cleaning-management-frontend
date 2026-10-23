@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { User as UserIcon, Mail, Phone, Lock, Camera, Save, ArrowLeft, Shield, Bell, Globe } from 'lucide-react';
+import { User as UserIcon, Mail, Phone, Lock, Camera, Save, ArrowLeft, Shield, Bell, Globe, Eye, EyeOff } from 'lucide-react';
 import Header from './Header';
+import { useApp } from '../context';
 import type { User } from '../types';
 
 interface UserProfileProps {
@@ -12,18 +13,25 @@ interface UserProfileProps {
 }
 
 export default function UserProfile({ user, onLogout, theme, onToggleTheme }: UserProfileProps) {
+  const { setUser } = useApp();
   const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'settings'>('profile');
   const [profileData, setProfileData] = useState({
     name: user.name,
     email: user.email,
-    phone: user.email === 'admin@cloudlaundry.lk' ? '+94 771234567' : '+94 777654321',
+    phone: user.phone || '',
     profilePicture: localStorage.getItem(`profilePic_${user.id}`) || '',
   });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
+  });
+  const [showPassword, setShowPassword] = useState({
+    current: false,
+    next: false,
+    confirm: false,
   });
 
   const [notificationSettings, setNotificationSettings] = useState({
@@ -35,6 +43,7 @@ export default function UserProfile({ user, onLogout, theme, onToggleTheme }: Us
   });
 
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -51,30 +60,50 @@ export default function UserProfile({ user, onLogout, theme, onToggleTheme }: Us
     }
   };
 
-  const handleProfileUpdate = (e: React.FormEvent) => {
+  const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Update user data in localStorage
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      const userData = JSON.parse(storedUser);
-      userData.name = profileData.name;
-      userData.email = profileData.email;
-      localStorage.setItem('user', JSON.stringify(userData));
+    setIsSavingProfile(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/auth/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        // Email is deliberately not sent — changing it needs re-verification,
+        // which this form doesn't do (see authController.updateProfile).
+        body: JSON.stringify({ name: profileData.name, phone: profileData.phone }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setUser(data.user);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        setMessage({ type: 'success', text: 'Profile updated successfully!' });
+      } else {
+        setMessage({ type: 'error', text: data.message || 'Failed to update profile.' });
+      }
+    } catch (err) {
+      console.error('Update profile error:', err);
+      setMessage({ type: 'error', text: 'Cannot connect to server. Please try again.' });
+    } finally {
+      setIsSavingProfile(false);
+      setTimeout(() => setMessage(null), 3000);
     }
-    setMessage({ type: 'success', text: 'Profile updated successfully!' });
-    setTimeout(() => setMessage(null), 3000);
   };
 
-  const handlePasswordChange = (e: React.FormEvent) => {
+  // Backend validation (validators/authValidators.js) is authoritative — this
+  // regex is UX-only, so a real password change can't be faked past it.
+  const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validate password
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    
-    if (!passwordRegex.test(passwordData.newPassword)) {
-      setMessage({ 
-        type: 'error', 
-        text: 'Password must be at least 8 characters with uppercase, lowercase, number, and special character (@$!%*?&)' 
+
+    if (!PASSWORD_REGEX.test(passwordData.newPassword)) {
+      setMessage({
+        type: 'error',
+        text: 'Password must be at least 8 characters with uppercase, lowercase, number, and special character.',
       });
       setTimeout(() => setMessage(null), 5000);
       return;
@@ -86,9 +115,35 @@ export default function UserProfile({ user, onLogout, theme, onToggleTheme }: Us
       return;
     }
 
-    setMessage({ type: 'success', text: 'Password changed successfully!' });
-    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    setTimeout(() => setMessage(null), 3000);
+    setIsChangingPassword(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          currentPassword: passwordData.currentPassword,
+          newPassword: passwordData.newPassword,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setMessage({ type: 'success', text: 'Password changed successfully!' });
+        setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      } else {
+        setMessage({ type: 'error', text: data.message || 'Failed to change password.' });
+      }
+    } catch (err) {
+      console.error('Change password error:', err);
+      setMessage({ type: 'error', text: 'Cannot connect to server. Please try again.' });
+    } finally {
+      setIsChangingPassword(false);
+      setTimeout(() => setMessage(null), 5000);
+    }
   };
 
   const handleNotificationUpdate = (e: React.FormEvent) => {
@@ -214,7 +269,8 @@ export default function UserProfile({ user, onLogout, theme, onToggleTheme }: Us
                 </div>
               </div>
 
-              {/* Email */}
+              {/* Email — read-only: changing it would need re-verification, which
+                  this form doesn't do (see authController.updateProfile). */}
               <div>
                 <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
                   Email Address
@@ -224,11 +280,11 @@ export default function UserProfile({ user, onLogout, theme, onToggleTheme }: Us
                   <input
                     type="email"
                     value={profileData.email}
-                    onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
-                    required
+                    readOnly
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-100 dark:text-gray-400 text-gray-500 rounded-lg cursor-not-allowed"
                   />
                 </div>
+                <p className="mt-1 text-xs text-gray-400">Contact support to change your email address.</p>
               </div>
 
               {/* Phone */}
@@ -250,10 +306,11 @@ export default function UserProfile({ user, onLogout, theme, onToggleTheme }: Us
 
               <button
                 type="submit"
-                className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 font-medium"
+                disabled={isSavingProfile}
+                className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 font-medium disabled:opacity-50"
               >
                 <Save className="w-5 h-5" />
-                Save Profile Changes
+                {isSavingProfile ? 'Saving...' : 'Save Profile Changes'}
               </button>
             </form>
           )}
@@ -280,12 +337,21 @@ export default function UserProfile({ user, onLogout, theme, onToggleTheme }: Us
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
                   <input
-                    type="password"
+                    type={showPassword.current ? 'text' : 'password'}
+                    autoComplete="current-password"
                     value={passwordData.currentPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                    className="w-full pl-10 pr-11 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword({ ...showPassword, current: !showPassword.current })}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500"
+                    tabIndex={-1}
+                  >
+                    {showPassword.current ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
               </div>
 
@@ -297,12 +363,21 @@ export default function UserProfile({ user, onLogout, theme, onToggleTheme }: Us
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
                   <input
-                    type="password"
+                    type={showPassword.next ? 'text' : 'password'}
+                    autoComplete="new-password"
                     value={passwordData.newPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                    className="w-full pl-10 pr-11 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword({ ...showPassword, next: !showPassword.next })}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500"
+                    tabIndex={-1}
+                  >
+                    {showPassword.next ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
               </div>
 
@@ -314,21 +389,31 @@ export default function UserProfile({ user, onLogout, theme, onToggleTheme }: Us
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
                   <input
-                    type="password"
+                    type={showPassword.confirm ? 'text' : 'password'}
+                    autoComplete="new-password"
                     value={passwordData.confirmPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                    className="w-full pl-10 pr-11 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword({ ...showPassword, confirm: !showPassword.confirm })}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500"
+                    tabIndex={-1}
+                  >
+                    {showPassword.confirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
               </div>
 
               <button
                 type="submit"
-                className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 font-medium"
+                disabled={isChangingPassword}
+                className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 font-medium disabled:opacity-50"
               >
                 <Lock className="w-5 h-5" />
-                Change Password
+                {isChangingPassword ? 'Changing Password...' : 'Change Password'}
               </button>
             </form>
           )}

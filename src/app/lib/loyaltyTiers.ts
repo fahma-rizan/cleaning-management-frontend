@@ -15,10 +15,10 @@ export interface LoyaltyTier {
 }
 
 export const LOYALTY_TIERS: LoyaltyTier[] = [
-  { name: 'Bronze',   min: 0,   max: 99,       discount: 0,    earningRate: 1.0, color: 'text-amber-700',  bg: 'bg-amber-100',  ring: 'ring-amber-300',  gradient: 'from-amber-500 to-amber-700' },
-  { name: 'Silver',   min: 100, max: 299,      discount: 0.05, earningRate: 1.5, color: 'text-slate-600',  bg: 'bg-slate-100',  ring: 'ring-slate-300',  gradient: 'from-slate-400 to-slate-600' },
-  { name: 'Gold',     min: 300, max: 699,      discount: 0.10, earningRate: 2.0, color: 'text-yellow-600', bg: 'bg-yellow-100', ring: 'ring-yellow-300', gradient: 'from-yellow-400 to-yellow-600' },
-  { name: 'Platinum', min: 700, max: Infinity, discount: 0.15, earningRate: 3.0, color: 'text-purple-600', bg: 'bg-purple-100', ring: 'ring-purple-300', gradient: 'from-purple-500 to-purple-700' },
+  { name: 'Bronze',   min: 0,    max: 500,      discount: 0,    earningRate: 1.0, color: 'text-amber-700',  bg: 'bg-amber-100',  ring: 'ring-amber-300',  gradient: 'from-amber-500 to-amber-700' },
+  { name: 'Silver',   min: 501,  max: 1500,     discount: 0.05, earningRate: 1.5, color: 'text-slate-600',  bg: 'bg-slate-100',  ring: 'ring-slate-300',  gradient: 'from-slate-400 to-slate-600' },
+  { name: 'Gold',     min: 1501, max: 3000,     discount: 0.10, earningRate: 2.0, color: 'text-yellow-600', bg: 'bg-yellow-100', ring: 'ring-yellow-300', gradient: 'from-yellow-400 to-yellow-600' },
+  { name: 'Platinum', min: 3001, max: Infinity, discount: 0.15, earningRate: 3.0, color: 'text-purple-600', bg: 'bg-purple-100', ring: 'ring-purple-300', gradient: 'from-purple-500 to-purple-700' },
 ];
 
 export const getTierByName = (name?: string): LoyaltyTier => {

@@ -16,13 +16,13 @@ export default function Header({ user, onLogout, theme = 'light', onToggleTheme,
   return (
     <header className="bg-white dark:bg-gray-900 shadow-sm transition-colors">
       <nav className="container mx-auto px-4 py-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-y-3">
           <Link to="/" className="flex items-center gap-2">
             <img src={logo} alt="Cloud Laundry Logo" className="w-12 h-12 object-contain" />
             <span className="text-xl font-bold dark:text-white">CLOUD LAUNDRY.LK</span>
           </Link>
-          
-          <div className="flex items-center gap-6">
+
+          <div className="flex items-center gap-3 sm:gap-6 flex-wrap justify-end">
             <Link to="/services" className="text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 transition-colors">
               Services
             </Link>
@@ -54,7 +54,7 @@ export default function Header({ user, onLogout, theme = 'light', onToggleTheme,
                   <LayoutDashboard className="w-5 h-5" />
                   Dashboard
                 </Link>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   <button
                     onClick={onProfileClick}
                     className="flex items-center gap-2 px-3 py-2 bg-purple-50 dark:bg-purple-900/30 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors cursor-pointer"

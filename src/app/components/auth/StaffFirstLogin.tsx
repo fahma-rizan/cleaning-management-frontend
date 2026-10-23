@@ -74,7 +74,11 @@ export default function StaffFirstLogin() {
     if (!formData.newPass) {
       errors.newPass = 'New password is required';
     } else if (passwordStrength.strength < 5) {
-      errors.newPass = 'Password must be at least 8 characters with uppercase, lowercase, number and special character.';
+      // Backend policy requires ALL of length/uppercase/lowercase/number/special
+      // (validators/authValidators.js) — matching that exactly here, not just
+      // "reasonably strong", so this never blocks on something the backend
+      // would reject, or passes something the backend would reject.
+      errors.newPass = 'Password must be at least 8 characters and include uppercase, lowercase, a number, and a special character';
     }
     if (!formData.confirm) {
       errors.confirm = 'Please confirm your new password';
@@ -159,6 +163,7 @@ export default function StaffFirstLogin() {
             leftIcon={<Lock size={18} />}
             rightIcon={showTempPass ? <EyeOff size={18} /> : <Eye size={18} />}
             onClickRightIcon={() => setShowTempPass(!showTempPass)}
+            autoComplete="current-password"
             value={formData.temp}
             onChange={(e) => setFormData({ ...formData, temp: e.target.value })}
             error={fieldErrors.temp}
@@ -174,6 +179,7 @@ export default function StaffFirstLogin() {
             leftIcon={<Lock size={18} />}
             rightIcon={showNewPass ? <EyeOff size={18} /> : <Eye size={18} />}
             onClickRightIcon={() => setShowNewPass(!showNewPass)}
+            autoComplete="new-password"
             value={formData.newPass}
             onChange={(e) => setFormData({ ...formData, newPass: e.target.value })}
             error={fieldErrors.newPass}

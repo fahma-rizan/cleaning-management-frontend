@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { MessageCircle, Send, Bot, User as UserIcon, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { fetchWithAuth } from '../utils/api';
 
 interface Message {
   id: string;
@@ -21,6 +22,7 @@ export default function ChatbotFinder() {
     },
   ]);
   const [inputText, setInputText] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -29,7 +31,7 @@ export default function ChatbotFinder() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, isTyping]);
 
   const addMessage = (sender: 'bot' | 'user', text: string, options?: string[], serviceLinks?: any[]) => {
     const newMessage: Message = {
@@ -151,13 +153,38 @@ export default function ChatbotFinder() {
   };
 
   const handleSendMessage = () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || isTyping) return;
 
-    addMessage('user', inputText);
-    const userMessage = inputText.toLowerCase();
+    const text = inputText;
+    addMessage('user', text);
     setInputText('');
+    setIsTyping(true);
 
-    setTimeout(() => {
+    // AI replies via POST /api/chatbot/chat, with the visible conversation
+    // so far as history. Falls back to the keyword responder below if the
+    // backend/AI is unavailable (e.g. no GROQ_API_KEY configured).
+    const history = messages
+      .filter((m) => m.text)
+      .map((m) => ({ sender: m.sender, text: m.text }));
+
+    fetchWithAuth('/chatbot/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: text, history }),
+    })
+      .then((data: any) => {
+        if (!data?.success) throw new Error(data?.message || 'Chat request failed');
+        const links = (data.serviceLinks || []).map((s: any) => ({
+          id: s.id,
+          name: s.price ? `${s.name} - ${s.price}` : s.name,
+        }));
+        addMessage('bot', data.reply, undefined, links.length ? links : undefined);
+      })
+      .catch(() => respondFromKeywords(text.toLowerCase()))
+      .finally(() => setIsTyping(false));
+  };
+
+  const respondFromKeywords = (userMessage: string) => {
+    {
       // Simple keyword-based responses
       if (userMessage.includes('home') || userMessage.includes('house')) {
         addMessage(
@@ -210,7 +237,7 @@ export default function ChatbotFinder() {
           ['Home/Office', 'Furniture', 'Laundry', 'Curtains', 'View All Services']
         );
       }
-    }, 500);
+    }
   };
 
   return (
@@ -311,6 +338,16 @@ export default function ChatbotFinder() {
                 </div>
               </div>
             ))}
+            {isTyping && (
+              <div className="flex items-center gap-2 text-gray-400 text-sm px-1">
+                <Bot className="w-4 h-4" />
+                <span className="flex gap-1">
+                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" />
+                </span>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
@@ -323,11 +360,13 @@ export default function ChatbotFinder() {
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                 placeholder="Type your message..."
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                disabled={isTyping}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 disabled:opacity-60"
               />
               <button
                 onClick={handleSendMessage}
-                className="bg-purple-600 text-white p-2 rounded-lg hover:bg-purple-700 transition-colors"
+                disabled={isTyping}
+                className="bg-purple-600 text-white p-2 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <Send className="w-5 h-5" />
               </button>

@@ -21,7 +21,6 @@ import {
   Save,
 } from "lucide-react";
 import type { User as UserType } from "../types";
-import MaterialUsageForm from "./MaterialUsageForm";
 import InvoiceGenerator from "./InvoiceGenerator";
 import type { InvoiceData } from "./InvoiceGenerator";
 import { fetchWithAuth } from "../utils/api";
@@ -63,6 +62,11 @@ interface Booking {
   isPickupStaff?: boolean;
   isDeliveryStaff?: boolean;
   hasPendingDecline?: boolean;
+  // Computed server-side from CompletionReport/MaterialRequest — replaces
+  // the old localStorage-based tracking so it's correct across staff/devices
+  // and updates the instant ANY co-assigned staff member submits a report.
+  hasCompletionReport: boolean;
+  canRecordMaterialUsage: boolean;
 }
 
 export default function StaffDashboard({
@@ -75,9 +79,6 @@ export default function StaffDashboard({
   const [isAvailable, setIsAvailable] = useState<boolean>(true);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submittedMaterialIds, setSubmittedMaterialIds] = useState<Set<string>>(
-    new Set(JSON.parse(localStorage.getItem('submittedMaterialUsage') || '[]'))
-  );
 
   // Profile edit modal
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -179,16 +180,14 @@ export default function StaffDashboard({
     return () => clearInterval(interval);
   }, []);
 
-  // Re-read submitted material IDs when the tab regains focus (staff returns from CompleteServiceForm)
+  // Re-check assigned bookings when the tab regains focus (staff returns
+  // from CompleteServiceForm) — picks up the fresh hasCompletionReport/
+  // canRecordMaterialUsage flags from the backend.
   useEffect(() => {
-    const refresh = () => {
-      setSubmittedMaterialIds(
-        new Set(JSON.parse(localStorage.getItem('submittedMaterialUsage') || '[]'))
-      );
-    };
+    const refresh = () => fetchBookings(false);
     window.addEventListener('focus', refresh);
     return () => window.removeEventListener('focus', refresh);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Decline task modal state
   const [showDeclineModal, setShowDeclineModal] = useState(false);
@@ -210,11 +209,6 @@ export default function StaffDashboard({
       .then((data) => { if (data?.success) setPendingAvailabilityRequest(data.request); })
       .catch(() => {});
   }, []);
-
-  // Material usage form state
-  const [showMaterialForm, setShowMaterialForm] = useState(false);
-  const [selectedTaskForMaterial, setSelectedTaskForMaterial] =
-    useState<Booking | null>(null);
 
   // Invoice modal state
   const [invoiceModalData, setInvoiceModalData] = useState<InvoiceData | null>(null);
@@ -241,7 +235,7 @@ export default function StaffDashboard({
   // material usage submitted + cash received (deferred payments only)
   const isTaskDone = (b: Booking) =>
     b.status === "completed" &&
-    submittedMaterialIds.has(b._id) &&
+    b.hasCompletionReport &&
     (!isDeferredPayment(b.paymentMethod) || b.cashReceived);
 
   const buildInvoiceData = (booking: Booking): InvoiceData => {
@@ -279,52 +273,6 @@ export default function StaffDashboard({
       paymentMethod: paymentMethodLabel(booking.paymentMethod),
       status,
     };
-  };
-
-  // Handle material usage submission (localStorage — not in this workload scope)
-  const handleMaterialUsageSubmit = (usedItems: any[], notes: string) => {
-    if (!selectedTaskForMaterial) return;
-
-    const usageRecord = {
-      id: `MU-${Date.now()}`,
-      taskId: selectedTaskForMaterial.id,
-      staffId: user.email,
-      staffName: user.name,
-      customer: selectedTaskForMaterial.customer,
-      service: selectedTaskForMaterial.service,
-      items: usedItems,
-      notes: notes,
-      date: new Date().toISOString(),
-      displayDate: new Date().toLocaleDateString(),
-      displayTime: new Date().toLocaleTimeString(),
-    };
-
-    const existingRecords = JSON.parse(
-      localStorage.getItem("materialUsageRecords") || "[]",
-    );
-    existingRecords.unshift(usageRecord);
-    localStorage.setItem(
-      "materialUsageRecords",
-      JSON.stringify(existingRecords),
-    );
-
-    const inventoryItems = JSON.parse(
-      localStorage.getItem("inventoryItems") || "[]",
-    );
-    usedItems.forEach((usedItem) => {
-      const itemIndex = inventoryItems.findIndex(
-        (item: any) => item.id === usedItem.id,
-      );
-      if (itemIndex !== -1) {
-        inventoryItems[itemIndex].currentStock -= usedItem.quantityUsed;
-      }
-    });
-    localStorage.setItem("inventoryItems", JSON.stringify(inventoryItems));
-
-    setShowMaterialForm(false);
-    setSelectedTaskForMaterial(null);
-
-    toast.success(`Material usage report submitted — ${usedItems.length} items recorded.`);
   };
 
   // Opens decline modal
@@ -913,12 +861,12 @@ export default function StaffDashboard({
                               <span className="px-4 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium">
                                 ✓ Task Completed
                               </span>
-                              {submittedMaterialIds.has(booking._id) ? (
+                              {booking.hasCompletionReport ? (
                                 <span className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium flex items-center gap-2">
                                   <Package className="w-4 h-4" />
                                   ✓ Submitted Material Usage
                                 </span>
-                              ) : (
+                              ) : booking.canRecordMaterialUsage ? (
                                 <Link
                                   to={`/staff/complete-service/${booking._id}`}
                                   className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-2"
@@ -926,7 +874,7 @@ export default function StaffDashboard({
                                   <Package className="w-4 h-4" />
                                   Record Material Usage
                                 </Link>
-                              )}
+                              ) : null}
                             </>
                           )}
 
@@ -1204,20 +1152,6 @@ export default function StaffDashboard({
         </div>
       )}
 
-      {/* Material Usage Form Modal */}
-      {selectedTaskForMaterial && (
-        <MaterialUsageForm
-          isOpen={showMaterialForm}
-          onClose={() => {
-            setShowMaterialForm(false);
-            setSelectedTaskForMaterial(null);
-          }}
-          onSubmit={handleMaterialUsageSubmit}
-          taskId={selectedTaskForMaterial.id}
-          taskService={selectedTaskForMaterial.service}
-          customerName={selectedTaskForMaterial.customer}
-        />
-      )}
 
       {/* ── Invoice Preview Modal ─────────────────────────────────────────── */}
       {invoiceModalData && (

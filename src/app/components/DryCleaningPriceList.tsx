@@ -16,6 +16,11 @@ interface SelectedItem extends GarmentItem {
 interface DryCleaningPriceListProps {
   onTotalChange: (total: number, items: SelectedItem[]) => void;
   theme?: 'light' | 'dark';
+  // Reused for Washing & Pressing / Pressing Only — defaults keep the
+  // original Dry Cleaning behaviour.
+  serviceId?: number;
+  title?: string;
+  subtitle?: string;
 }
 
 // Fallback data — used only if the live price list fails to load, so the
@@ -56,15 +61,21 @@ const FALLBACK_GARMENTS: GarmentItem[] = [
   { id: 'cloak', name: 'CLOAK', price: 500, category: 'Winter Wear' },
 ];
 
-export default function DryCleaningPriceList({ onTotalChange, theme = 'light' }: DryCleaningPriceListProps) {
+export default function DryCleaningPriceList({
+  onTotalChange,
+  theme = 'light',
+  serviceId = 9,
+  title = 'DRY CLEANING PRICE LIST',
+  subtitle = 'Select garments and specify quantities for your dry cleaning service',
+}: DryCleaningPriceListProps) {
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
-  const [garments, setGarments] = useState<GarmentItem[]>(FALLBACK_GARMENTS);
+  const [garments, setGarments] = useState<GarmentItem[]>(serviceId === 9 ? FALLBACK_GARMENTS : []);
   const [loadingPrices, setLoadingPrices] = useState(true);
 
   useEffect(() => {
     const fetchPrices = async () => {
       try {
-        const data = await fetchWithAuth('/pricelists/9');
+        const data = await fetchWithAuth(`/pricelists/${serviceId}`);
         const groups = data?.priceList?.pricing?.groups;
         if (!Array.isArray(groups)) throw new Error('Unexpected price list shape');
 
@@ -81,13 +92,13 @@ export default function DryCleaningPriceList({ onTotalChange, theme = 'light' }:
         });
         if (items.length > 0) setGarments(items);
       } catch (err) {
-        console.error('Failed to load live dry cleaning prices, using fallback:', err);
+        console.error('Failed to load live garment prices, using fallback:', err);
       } finally {
         setLoadingPrices(false);
       }
     };
     fetchPrices();
-  }, []);
+  }, [serviceId]);
 
   const handleAddItem = (garment: GarmentItem) => {
     const existingItem = selectedItems.find(item => item.id === garment.id);
@@ -158,8 +169,8 @@ export default function DryCleaningPriceList({ onTotalChange, theme = 'light' }:
     <div className="space-y-8">
       {/* Price List Header */}
       <div className="bg-purple-600 dark:bg-purple-700 text-white rounded-lg p-6">
-        <h2 className="text-3xl mb-2 font-bold">DRY CLEANING PRICE LIST</h2>
-        <p className="text-purple-100">Select garments and specify quantities for your dry cleaning service</p>
+        <h2 className="text-3xl mb-2 font-bold">{title}</h2>
+        <p className="text-purple-100">{subtitle}</p>
       </div>
 
       {loadingPrices && (
