@@ -18,7 +18,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
-import { settingsAPI } from "../../lib/api";
+import { settingsAPI, offerAPI } from "../../lib/api";
 import { normalizePhoneNumber } from "../../lib/phone";
 import { isValidEmail, isValidPhone } from "../../lib/validation";
 import { toast } from "sonner";
@@ -102,7 +102,11 @@ export function SystemSettings() {
     discountValue: 0,
     validFrom: "",
     validTo: "",
-    applicableServices: ["all"],
+    applicableServices: [] as number[],
+    minOrderAmount: 0,
+    maxUsagePerUser: 1,
+    badge: "",
+    badgeColor: "blue",
     isActive: true,
     code: "",
   });
@@ -156,6 +160,21 @@ export function SystemSettings() {
       })
       .catch((err) => console.error("Failed to load settings:", err))
       .finally(() => setLoading(false));
+  }, []);
+
+  // ── Load offers from API ─────────────────────────────────────────────────
+  // Was never fetched at all before — "Add Offer" only ever touched local
+  // React state (setOffers directly, no API call), so nothing created here
+  // was saved to the database and this list was always empty on reload.
+  useEffect(() => {
+    offerAPI
+      .getAll()
+      .then((data) => {
+        // Backend documents use Mongo's _id; the rest of this component's
+        // JSX (key={offer.id}, o.id === editingOffer.id, etc.) expects id.
+        setOffers(data.map((o: any) => ({ ...o, id: o._id })));
+      })
+      .catch((err) => console.error("Failed to load offers:", err));
   }, []);
 
   const showMsg = (msg: string) => {
@@ -1037,7 +1056,7 @@ export function SystemSettings() {
                                       {svc.serviceName}
                                     </p>
                                     <p className="text-xs text-gray-400 mt-0.5 capitalize">
-                                      {svc.pricingType.replace("-", " ")}{" "}
+                                      {(svc.pricingType || "unknown").replace("-", " ")}{" "}
                                       pricing
                                     </p>
                                   </div>
@@ -1133,7 +1152,11 @@ export function SystemSettings() {
                         discountValue: 0,
                         validFrom: "",
                         validTo: "",
-                        applicableServices: ["all"],
+                        applicableServices: [],
+                        minOrderAmount: 0,
+                        maxUsagePerUser: 1,
+                        badge: "",
+                        badgeColor: "blue",
                         isActive: true,
                         code: "",
                       });
@@ -1169,6 +1192,19 @@ export function SystemSettings() {
                               <p className="font-bold text-gray-900">
                                 {offer.title}
                               </p>
+                              {offer.badge && (
+                                <span
+                                  className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                    offer.badgeColor === "green"
+                                      ? "bg-green-50 text-green-600"
+                                      : offer.badgeColor === "orange"
+                                        ? "bg-orange-50 text-orange-600"
+                                        : "bg-blue-50 text-blue-600"
+                                  }`}
+                                >
+                                  {offer.badge}
+                                </span>
+                              )}
                               {offer.code && (
                                 <span className="text-xs font-mono bg-purple-50 text-purple-600 px-2 py-0.5 rounded">
                                   {offer.code}
@@ -1197,7 +1233,28 @@ export function SystemSettings() {
                           <button
                             onClick={() => {
                               setEditingOffer(offer);
-                              setOfferForm(offer);
+                              // Merge defaults for any offer saved before
+                              // these fields existed, so the form doesn't
+                              // show "undefined" for older records. Also
+                              // strips the old ['all'] string sentinel from
+                              // pre-existing offers — under the new
+                              // convention an empty array already means
+                              // "applies to every service", so this maps
+                              // cleanly onto the same real-world meaning.
+                              setOfferForm({
+                                minOrderAmount: 0,
+                                maxUsagePerUser: 1,
+                                badge: "",
+                                badgeColor: "blue",
+                                ...offer,
+                                applicableServices: Array.isArray(
+                                  offer.applicableServices,
+                                )
+                                  ? offer.applicableServices.filter(
+                                      (s: any) => typeof s === "number",
+                                    )
+                                  : [],
+                              });
                               setShowOfferModal(true);
                             }}
                             className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
@@ -1205,9 +1262,14 @@ export function SystemSettings() {
                             <Edit className="w-4 h-4 text-gray-400" />
                           </button>
                           <button
-                            onClick={() =>
-                              setOffers(offers.filter((o) => o.id !== offer.id))
-                            }
+                            onClick={async () => {
+                              try {
+                                await offerAPI.remove(offer.id);
+                                setOffers(offers.filter((o) => o.id !== offer.id));
+                              } catch (err: any) {
+                                toast.error(err.error || "Failed to delete offer");
+                              }
+                            }}
                             className="p-2 hover:bg-red-50 rounded-xl transition-colors"
                           >
                             <Trash2 className="w-4 h-4 text-red-400" />
@@ -1330,27 +1392,6 @@ export function SystemSettings() {
                 </div>
                 <div>
                   <Label className="text-sm font-bold text-gray-700 mb-1 block">
-                    Applicable Services
-                  </Label>
-                  <select
-                    value={offerForm.applicableServices[0]}
-                    onChange={(e) =>
-                      setOfferForm({
-                        ...offerForm,
-                        applicableServices: [e.target.value],
-                      })
-                    }
-                    className="w-full h-12 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-600 outline-none"
-                  >
-                    <option value="all">All Services</option>
-                    <option value="home">Home Cleaning</option>
-                    <option value="laundry">Laundry Services</option>
-                    <option value="shampoo">Shampoo Cleaning</option>
-                    <option value="curtain">Curtain Cleaning</option>
-                  </select>
-                </div>
-                <div>
-                  <Label className="text-sm font-bold text-gray-700 mb-1 block">
                     Valid From *
                   </Label>
                   <Input
@@ -1374,6 +1415,114 @@ export function SystemSettings() {
                     }
                     className="h-12 rounded-xl"
                   />
+                </div>
+                <div>
+                  <Label className="text-sm font-bold text-gray-700 mb-1 block">
+                    Minimum Order Amount
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      value={offerForm.minOrderAmount}
+                      onChange={(e) =>
+                        setOfferForm({
+                          ...offerForm,
+                          minOrderAmount: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      placeholder="0"
+                      className="h-12 rounded-xl pr-12"
+                    />
+                    <span className="absolute right-4 top-3 text-gray-400 font-bold text-sm">
+                      LKR
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-sm font-bold text-gray-700 mb-1 block">
+                    Max Usage Per User
+                  </Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={offerForm.maxUsagePerUser}
+                    onChange={(e) =>
+                      setOfferForm({
+                        ...offerForm,
+                        maxUsagePerUser: parseInt(e.target.value) || 1,
+                      })
+                    }
+                    className="h-12 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm font-bold text-gray-700 mb-1 block">
+                    Badge (optional)
+                  </Label>
+                  <Input
+                    value={offerForm.badge}
+                    onChange={(e) =>
+                      setOfferForm({ ...offerForm, badge: e.target.value })
+                    }
+                    placeholder="e.g., Hot, New, Limited"
+                    className="h-12 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm font-bold text-gray-700 mb-1 block">
+                    Badge Color
+                  </Label>
+                  <select
+                    value={offerForm.badgeColor}
+                    onChange={(e) =>
+                      setOfferForm({
+                        ...offerForm,
+                        badgeColor: e.target.value,
+                      })
+                    }
+                    className="w-full h-12 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-600 outline-none"
+                  >
+                    <option value="blue">Blue</option>
+                    <option value="green">Green</option>
+                    <option value="orange">Orange</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-bold text-gray-700 mb-2 block">
+                  Applicable Services
+                </Label>
+                <p className="text-xs text-gray-400 mb-2">
+                  Leave all unchecked to apply this offer to every service.
+                </p>
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-3 border border-gray-200 rounded-xl">
+                  {/* Pulled live from priceLists (already loaded for the
+                      Pricing tab) instead of a hardcoded list, so a newly
+                      added service shows up here automatically without
+                      needing another code change. */}
+                  {priceLists.map((svc: any) => (
+                    <label
+                      key={svc.serviceId}
+                      className="flex items-center gap-2 text-sm cursor-pointer"
+                    >
+                      <Checkbox
+                        checked={offerForm.applicableServices.includes(
+                          svc.serviceId,
+                        )}
+                        onCheckedChange={(checked) => {
+                          setOfferForm({
+                            ...offerForm,
+                            applicableServices: checked
+                              ? [...offerForm.applicableServices, svc.serviceId]
+                              : offerForm.applicableServices.filter(
+                                  (id: number) => id !== svc.serviceId,
+                                ),
+                          });
+                        }}
+                      />
+                      {svc.serviceName}
+                    </label>
+                  ))}
                 </div>
               </div>
               <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
@@ -1402,31 +1551,38 @@ export function SystemSettings() {
                 Cancel
               </Button>
               <Button
-                onClick={() => {
+                onClick={async () => {
                   if (
                     !offerForm.title ||
                     !offerForm.description ||
                     !offerForm.validFrom ||
-                    !offerForm.validTo
+                    !offerForm.validTo ||
+                    !offerForm.code
                   ) {
+                    // code is required by the backend's Offer schema too —
+                    // wasn't checked here before, so a blank code used to
+                    // reach the server and fail there instead of here.
                     alert("Please fill all required fields");
                     return;
                   }
-                  if (editingOffer) {
-                    setOffers(
-                      offers.map((o) =>
-                        o.id === editingOffer.id
-                          ? { ...offerForm, id: editingOffer.id }
-                          : o,
-                      ),
-                    );
-                  } else {
-                    setOffers([
-                      ...offers,
-                      { ...offerForm, id: Date.now().toString() },
-                    ]);
+                  try {
+                    if (editingOffer) {
+                      const updated = await offerAPI.update(editingOffer.id, offerForm);
+                      setOffers(
+                        offers.map((o) =>
+                          o.id === editingOffer.id
+                            ? { ...updated, id: updated._id }
+                            : o,
+                        ),
+                      );
+                    } else {
+                      const created = await offerAPI.create(offerForm);
+                      setOffers([...offers, { ...created, id: created._id }]);
+                    }
+                    setShowOfferModal(false);
+                  } catch (err: any) {
+                    toast.error(err.error || "Failed to save offer");
                   }
-                  setShowOfferModal(false);
                 }}
                 className="h-12 px-10 rounded-xl font-bold bg-purple-600 hover:bg-purple-700 text-white"
               >

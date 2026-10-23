@@ -208,8 +208,8 @@ export function ReviewsManagement() {
                       </div>
                       <span>
                         • {review.serviceName} •{" "}
-                        {new Date(review.createdAt).toLocaleDateString()} •{" "}
-                        Booking #{review.bookingId}
+                        {new Date(review.createdAt).toLocaleDateString()}
+                        {review.bookingId && <> • Booking #{review.bookingId}</>}
                       </span>
                     </div>
                   </div>

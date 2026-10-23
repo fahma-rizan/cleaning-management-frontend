@@ -61,6 +61,16 @@ interface Cleaner {
   updatedAt: string;
 }
 
+interface CompletedJob {
+  _id: string;
+  bookingId: string;
+  serviceName: string;
+  customerName: string;
+  address: string;
+  assignedStaffName: string;
+  taskCompletedAt: string;
+}
+
 // Fit map to markers
 function FitBounds({ cleaners }: { cleaners: Cleaner[] }) {
   const map = useMap();
@@ -98,8 +108,16 @@ export function GPSTracking() {
     null,
   );
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [completedToday, setCompletedToday] = useState<CompletedJob[]>([]);
   const socketRef = useRef<Socket | null>(null);
   const markerRefs = useRef<Record<string, L.Marker | null>>({});
+
+  const loadCompletedToday = () => {
+    gpsAPI
+      .getCompletedToday()
+      .then((data) => setCompletedToday(data))
+      .catch((err) => console.error("Failed to load completed jobs:", err));
+  };
 
   // Load initial data
   useEffect(() => {
@@ -108,6 +126,7 @@ export function GPSTracking() {
       .then((data) => setCleaners(data))
       .catch((err) => console.error("Failed to load GPS:", err))
       .finally(() => setLoading(false));
+    loadCompletedToday();
   }, []);
   // Socket.io real-time updates
   useEffect(() => {
@@ -124,10 +143,25 @@ export function GPSTracking() {
     });
 
     socket.on("cleaner-location-update", (updated: Cleaner) => {
-      setCleaners((prev) =>
-        prev.map((c) => (c._id === updated._id ? updated : c)),
-      );
+      setCleaners((prev) => {
+        const isActive = updated.status === "On the Way" || updated.status === "On Site";
+
+        if (!isActive) {
+          // Job finished (or staff went offline) — remove them from the
+          // live map/list instead of leaving a stale marker behind.
+          return prev.filter((c) => c._id !== updated._id);
+        }
+
+        const alreadyTracked = prev.some((c) => c._id === updated._id);
+        return alreadyTracked
+          ? prev.map((c) => (c._id === updated._id ? updated : c))
+          : [...prev, updated]; // newly went active mid-session — wasn't in the initial fetch
+      });
       setLastUpdate(new Date());
+
+      if (updated.status === "Completed") {
+        loadCompletedToday();
+      }
     });
 
     return () => {
@@ -140,9 +174,7 @@ export function GPSTracking() {
     (c) => c.status === "On the Way",
   ).length;
   const onSiteCount = cleaners.filter((c) => c.status === "On Site").length;
-  const completedCount = cleaners.filter(
-    (c) => c.status === "Completed",
-  ).length;
+  const completedCount = completedToday.length;
   const selectedCleaner =
     cleaners.find((c) => c._id === selectedCleanerId) ?? null;
 
@@ -357,8 +389,57 @@ export function GPSTracking() {
 
         {/* Sidebar */}
         <div className="space-y-4">
-          <h3 className="text-xl font-bold text-gray-900">Active Cleaners</h3>
-          {filteredCleaners.length === 0 ? (
+          <h3 className="text-xl font-bold text-gray-900">
+            {statusFilter === "Completed" ? "Completed Today" : "Active Cleaners"}
+          </h3>
+          {statusFilter === "Completed" ? (
+            completedToday.length === 0 ? (
+              <div className="bg-white rounded-2xl p-8 border border-gray-100 text-center text-gray-500">
+                No completed services today
+              </div>
+            ) : (
+              <div className="space-y-4 max-h-[560px] overflow-y-auto pr-1">
+                {completedToday.map((job) => (
+                  <div
+                    key={job._id}
+                    className="rounded-2xl overflow-hidden border-2 border-gray-100 shadow-sm p-5"
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h4 className="font-bold text-gray-900 leading-tight text-lg">
+                          {job.serviceName}
+                        </h4>
+                        <p className="text-gray-500 text-sm font-medium">
+                          {job.customerName}
+                        </p>
+                      </div>
+                      <Badge className="bg-gray-50 text-gray-500 border-none shadow-none font-bold px-3 py-1 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Completed
+                      </Badge>
+                    </div>
+                    <div className="space-y-2 pt-3 border-t border-gray-50">
+                      <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
+                        <User className="w-4 h-4 text-gray-400" />
+                        Staff: {job.assignedStaffName || "—"}
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
+                        <MapPin className="w-4 h-4 text-gray-400" />
+                        {job.address}
+                      </div>
+                      {job.taskCompletedAt && (
+                        <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
+                          <Clock className="w-4 h-4 text-gray-400" />
+                          Completed at{" "}
+                          {new Date(job.taskCompletedAt).toLocaleTimeString()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          ) : filteredCleaners.length === 0 ? (
             <div className="bg-white rounded-2xl p-8 border border-gray-100 text-center text-gray-500">
               No active cleaners right now
             </div>

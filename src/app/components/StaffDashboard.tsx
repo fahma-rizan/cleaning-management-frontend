@@ -24,6 +24,7 @@ import MaterialUsageForm from "./MaterialUsageForm";
 import InvoiceGenerator from "./InvoiceGenerator";
 import type { InvoiceData } from "./InvoiceGenerator";
 import { fetchWithAuth } from "../utils/api";
+import { gpsAPI } from "../lib/api";
 
 interface StaffDashboardProps {
   user: UserType;
@@ -65,6 +66,7 @@ export default function StaffDashboard({
   const [activeTab, setActiveTab] = useState<"tasks" | "schedule" | "completed">("tasks");
   const [isAvailable, setIsAvailable] = useState<boolean>(true);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [assignedComplaints, setAssignedComplaints] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submittedMaterialIds, setSubmittedMaterialIds] = useState<Set<string>>(
     new Set(JSON.parse(localStorage.getItem('submittedMaterialUsage') || '[]'))
@@ -163,10 +165,41 @@ export default function StaffDashboard({
     if (showLoader) setLoading(false);
   };
 
+  const fetchComplaints = async () => {
+    try {
+      const data = await fetchWithAuth('/complaints/assigned');
+      if (data.success) {
+        setAssignedComplaints(data.complaints);
+      }
+    } catch (err) {
+      console.error('Failed to load assigned complaints:', err);
+    }
+  };
+
+  const handleComplaintStatusUpdate = async (complaintId: string, status: 'In Progress' | 'Resolved') => {
+    try {
+      const data = await fetchWithAuth(`/complaints/${complaintId}/staff-status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status }),
+      });
+      if (data.success) {
+        setAssignedComplaints((prev) =>
+          prev.map((c) => (c._id === complaintId ? { ...c, status } : c)),
+        );
+      }
+    } catch (err) {
+      console.error('Failed to update complaint status:', err);
+    }
+  };
+
   // Initial load + polling every 30 s so team status stays in sync
   useEffect(() => {
     fetchBookings(true);
-    const interval = setInterval(() => fetchBookings(false), 30000);
+    fetchComplaints();
+    const interval = setInterval(() => {
+      fetchBookings(false);
+      fetchComplaints();
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -428,6 +461,25 @@ export default function StaffDashboard({
             booking._id === id ? { ...booking, status } : booking,
           ),
         );
+
+        // Keep GPS status in sync with the booking's actual lifecycle:
+        // Start Task → "On Site", Mark Complete → "Completed".
+        const gpsStatus = status === "in-progress" ? "On Site" : "Completed";
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              gpsAPI
+                .updateStatus(user.id, {
+                  status: gpsStatus,
+                  latitude: pos.coords.latitude,
+                  longitude: pos.coords.longitude,
+                })
+                .catch((err) => console.error("GPS push failed:", err));
+            },
+            (err) => console.error("Geolocation error:", err),
+          );
+        }
+
         if (status === "completed") {
           alert(
             "✅ Service marked as completed! Customer has been notified and can now submit a review or complaint.",
@@ -897,6 +949,77 @@ export default function StaffDashboard({
                       </div>
                     </div>
                   ))
+                )}
+
+                {/* Assigned Complaints to Resolve */}
+                {assignedComplaints.length > 0 && (
+                  <div className="pt-6 mt-6 border-t border-gray-200">
+                    <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                      Assigned Complaints
+                    </h3>
+                    <div className="space-y-4">
+                      {assignedComplaints.map((complaint) => (
+                        <div
+                          key={complaint._id}
+                          className="border border-orange-200 bg-orange-50 rounded-lg p-4"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <h4 className="font-semibold text-gray-900">{complaint.title}</h4>
+                              <p className="text-sm text-gray-600">
+                                {complaint.customerName} — {complaint.serviceName}
+                              </p>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <span
+                                className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                  complaint.priority === "High"
+                                    ? "bg-red-100 text-red-700"
+                                    : complaint.priority === "Medium"
+                                      ? "bg-yellow-100 text-yellow-700"
+                                      : "bg-gray-100 text-gray-600"
+                                }`}
+                              >
+                                {complaint.priority}
+                              </span>
+                              <span
+                                className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                  complaint.status === "Resolved"
+                                    ? "bg-green-100 text-green-700"
+                                    : complaint.status === "In Progress"
+                                      ? "bg-blue-100 text-blue-700"
+                                      : "bg-gray-100 text-gray-600"
+                                }`}
+                              >
+                                {complaint.status}
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-700 mb-3">{complaint.description}</p>
+                          {complaint.status !== "Resolved" && (
+                            <div className="flex gap-2">
+                              {complaint.status === "Pending" && (
+                                <button
+                                  onClick={() => handleComplaintStatusUpdate(complaint._id, "In Progress")}
+                                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                                >
+                                  Start Resolving
+                                </button>
+                              )}
+                              {complaint.status === "In Progress" && (
+                                <button
+                                  onClick={() => handleComplaintStatusUpdate(complaint._id, "Resolved")}
+                                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                                >
+                                  Mark Resolved
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             )}

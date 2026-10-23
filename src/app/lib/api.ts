@@ -1,13 +1,38 @@
 const BASE_URL = "http://localhost:5000/api";
 
-// Temporary mock token until auth finishes
-const MOCK_HEADERS = {
-  "Content-Type": "application/json",
+// Real auth headers, read fresh on every call (not cached at module load)
+// so a login that happens after this module is first imported is still
+// picked up. Matches how src/utils/auth.ts stores the token: 'accessToken'
+// is the current key, 'token' is kept as a legacy fallback.
+const authHeaders = () => {
+  const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
 };
 
-// Utility to convert backend photo paths to full URLs
+// For requests whose body is FormData (file uploads): fetch must set its own
+// Content-Type with the multipart boundary, so this only adds Authorization.
+// Using authHeaders() here (fixed Content-Type: application/json) breaks the
+// upload — the server can't parse the multipart body against a mismatched
+// Content-Type header, which is what was causing "Failed to save staff" /
+// "Failed to save admin" once protect+requireRole were added to those routes.
+const authHeadersMultipart = (): Record<string, string> => {
+  const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+// Utility to convert backend photo paths to full URLs.
+// profilePhoto is now a mix of two shapes depending on when it was uploaded:
+//  - old records: a relative local-disk path, e.g. "/uploads/staff/172xxx.jpg"
+//  - new records (post-Cloudinary): already a full URL, e.g.
+//    "https://res.cloudinary.com/.../cloudlaundry/staff/photo-xxx.jpg"
+// Prepending the backend origin to an already-absolute URL breaks it, so
+// only do that for the old relative-path shape.
 export const getPhotoUrl = (photoUrl: string) => {
   if (!photoUrl) return "";
+  if (photoUrl.startsWith("http://") || photoUrl.startsWith("https://")) return photoUrl;
   return `http://localhost:5000${photoUrl}`;
 };
 
@@ -15,14 +40,14 @@ export const getPhotoUrl = (photoUrl: string) => {
 
 export const adminAPI = {
   getAll: async () => {
-    const res = await fetch(`${BASE_URL}/admins`, { headers: MOCK_HEADERS });
+    const res = await fetch(`${BASE_URL}/admins`, { headers: authHeaders() });
     if (!res.ok) throw await res.json();
     return res.json();
   },
 
   getById: async (id: string) => {
     const res = await fetch(`${BASE_URL}/admins/${id}`, {
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -48,6 +73,7 @@ export const adminAPI = {
 
     const res = await fetch(`${BASE_URL}/admins`, {
       method: "POST",
+      headers: authHeadersMultipart(),
       body: form,
     });
     if (!res.ok) throw await res.json();
@@ -74,6 +100,7 @@ export const adminAPI = {
 
     const res = await fetch(`${BASE_URL}/admins/${id}`, {
       method: "PUT",
+      headers: authHeadersMultipart(),
       body: form,
     });
     if (!res.ok) throw await res.json();
@@ -83,7 +110,7 @@ export const adminAPI = {
   deactivate: async (id: string) => {
     const res = await fetch(`${BASE_URL}/admins/${id}/deactivate`, {
       method: "PUT",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -93,13 +120,13 @@ export const adminAPI = {
     // Prefer dedicated activate endpoint; fallback to generic update if unavailable.
     let res = await fetch(`${BASE_URL}/admins/${id}/activate`, {
       method: "PUT",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
 
     if (res.status === 404) {
       res = await fetch(`${BASE_URL}/admins/${id}`, {
         method: "PUT",
-        headers: MOCK_HEADERS,
+        headers: authHeaders(),
         body: JSON.stringify({ status: "Active" }),
       });
     }
@@ -118,7 +145,7 @@ export const adminAPI = {
   delete: async (id: string) => {
     const res = await fetch(`${BASE_URL}/admins/${id}`, {
       method: "DELETE",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -133,7 +160,7 @@ export const staffAPI = {
     if (search) params.append("search", search);
     if (status && status !== "All") params.append("status", status);
     const res = await fetch(`${BASE_URL}/staff?${params}`, {
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -141,7 +168,7 @@ export const staffAPI = {
 
   getById: async (id: string) => {
     const res = await fetch(`${BASE_URL}/staff/${id}`, {
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -149,7 +176,7 @@ export const staffAPI = {
 
   getAvailable: async () => {
     const res = await fetch(`${BASE_URL}/staff/available`, {
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -158,7 +185,8 @@ export const staffAPI = {
   create: async (formData: FormData) => {
     const res = await fetch(`${BASE_URL}/staff`, {
       method: "POST",
-      body: formData, // no Content-Type header — browser sets it with boundary
+      headers: authHeadersMultipart(), // no Content-Type — browser sets it with boundary
+      body: formData,
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -167,6 +195,7 @@ export const staffAPI = {
   update: async (id: string, formData: FormData) => {
     const res = await fetch(`${BASE_URL}/staff/${id}`, {
       method: "PUT",
+      headers: authHeadersMultipart(),
       body: formData,
     });
     if (!res.ok) throw await res.json();
@@ -176,7 +205,7 @@ export const staffAPI = {
   deactivate: async (id: string) => {
     const res = await fetch(`${BASE_URL}/staff/${id}/deactivate`, {
       method: "PUT",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -185,7 +214,7 @@ export const staffAPI = {
   activate: async (id: string) => {
     const res = await fetch(`${BASE_URL}/staff/${id}/activate`, {
       method: "PUT",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -194,7 +223,7 @@ export const staffAPI = {
   delete: async (id: string) => {
     const res = await fetch(`${BASE_URL}/staff/${id}`, {
       method: "DELETE",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -208,7 +237,7 @@ export const customerAPI = {
     const params = new URLSearchParams();
     if (search) params.append("search", search);
     const res = await fetch(`${BASE_URL}/customers?${params}`, {
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -216,7 +245,7 @@ export const customerAPI = {
 
   getById: async (id: string) => {
     const res = await fetch(`${BASE_URL}/customers/${id}`, {
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -224,7 +253,7 @@ export const customerAPI = {
 
   getDetails: async (id: string) => {
     const res = await fetch(`${BASE_URL}/customers/${id}/details`, {
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -236,7 +265,7 @@ export const customerAPI = {
   ) => {
     const res = await fetch(`${BASE_URL}/customers/${id}/status`, {
       method: "PUT",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
       body: JSON.stringify({ status }),
     });
     if (!res.ok) throw await res.json();
@@ -251,7 +280,7 @@ export const reviewAPI = {
     const params = new URLSearchParams();
     if (search) params.append("search", search);
     const res = await fetch(`${BASE_URL}/reviews?${params}`, {
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -259,7 +288,7 @@ export const reviewAPI = {
 
   getStats: async () => {
     const res = await fetch(`${BASE_URL}/reviews/stats`, {
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -270,14 +299,9 @@ export const reviewAPI = {
     rating: number;
     content: string;
   }) => {
-    const token = localStorage.getItem("token");
     const res = await fetch(`${BASE_URL}/reviews`, {
       method: "POST",
-      headers: {
-        ...MOCK_HEADERS,
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: authHeaders(),
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw await res.json();
@@ -294,7 +318,7 @@ export const reviewAPI = {
 
   getPublicReviews: async (serviceName: string) => {
     const res = await fetch(
-      `${BASE_URL}/reviews/public?serviceName=${encodeURIComponent(serviceName)}`,
+      `${BASE_URL}/reviews/public/list?serviceName=${encodeURIComponent(serviceName)}`,
     );
     if (!res.ok) throw await res.json();
     return res.json();
@@ -303,7 +327,7 @@ export const reviewAPI = {
   delete: async (id: string) => {
     const res = await fetch(`${BASE_URL}/reviews/${id}`, {
       method: "DELETE",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -319,14 +343,9 @@ export const complaintAPI = {
     description: string;
     priority: "High" | "Medium" | "Low";
   }) => {
-    const token = localStorage.getItem("token");
     const res = await fetch(`${BASE_URL}/complaints`, {
       method: "POST",
-      headers: {
-        ...MOCK_HEADERS,
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: authHeaders(),
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw await res.json();
@@ -338,7 +357,7 @@ export const complaintAPI = {
     if (status && status !== "All") params.append("status", status);
     if (search) params.append("search", search);
     const res = await fetch(`${BASE_URL}/complaints?${params}`, {
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -346,7 +365,7 @@ export const complaintAPI = {
 
   getById: async (id: string) => {
     const res = await fetch(`${BASE_URL}/complaints/${id}`, {
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -355,7 +374,7 @@ export const complaintAPI = {
   updateStatus: async (id: string, status: string) => {
     const res = await fetch(`${BASE_URL}/complaints/${id}/status`, {
       method: "PUT",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
       body: JSON.stringify({ status }),
     });
     if (!res.ok) throw await res.json();
@@ -365,7 +384,7 @@ export const complaintAPI = {
   updatePriority: async (id: string, priority: string) => {
     const res = await fetch(`${BASE_URL}/complaints/${id}/priority`, {
       method: "PUT",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
       body: JSON.stringify({ priority }),
     });
     if (!res.ok) throw await res.json();
@@ -375,7 +394,7 @@ export const complaintAPI = {
   assign: async (id: string, staffId: string) => {
     const res = await fetch(`${BASE_URL}/complaints/${id}/assign`, {
       method: "PUT",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
       body: JSON.stringify({ staffId }),
     });
     if (!res.ok) throw await res.json();
@@ -385,7 +404,7 @@ export const complaintAPI = {
   addNote: async (id: string, note: string) => {
     const res = await fetch(`${BASE_URL}/complaints/${id}/notes`, {
       method: "POST",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
       body: JSON.stringify({ note }),
     });
     if (!res.ok) throw await res.json();
@@ -397,21 +416,24 @@ export const complaintAPI = {
 
 export const overviewAPI = {
   getStats: () =>
-    fetch(`${BASE_URL}/overview/stats`, { headers: MOCK_HEADERS }).then((r) =>
+    fetch(`${BASE_URL}/overview/stats`, { headers: authHeaders() }).then((r) =>
       r.json(),
     ),
   getRevenueChart: () =>
-    fetch(`${BASE_URL}/overview/revenue-chart`, { headers: MOCK_HEADERS }).then(
+    fetch(`${BASE_URL}/overview/revenue-chart`, { headers: authHeaders() }).then(
       (r) => r.json(),
     ),
   getServiceBreakdown: () =>
     fetch(`${BASE_URL}/overview/service-breakdown`, {
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     }).then((r) => r.json()),
-  getRecentBookings: () =>
-    fetch(`${BASE_URL}/overview/recent-bookings`, {
-      headers: MOCK_HEADERS,
-    }).then((r) => r.json()),
+  getRecentBookings: (all?: boolean) =>
+    fetch(`${BASE_URL}/overview/recent-bookings${all ? "?all=true" : ""}`, {
+      headers: authHeaders(),
+    }).then((r) => {
+      if (!r.ok) return r.json().then((e) => { throw e; });
+      return r.json();
+    }),
 };
 
 // ─── REPORTS ──────────────────────────────────────────────────────────────────
@@ -425,7 +447,7 @@ export const reportAPI = {
   }) => {
     const params = new URLSearchParams(filters as any);
     const res = await fetch(`${BASE_URL}/reports/bookings?${params}`, {
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -434,7 +456,7 @@ export const reportAPI = {
   getPayments: async (filters: { period?: string; method?: string }) => {
     const params = new URLSearchParams(filters as any);
     const res = await fetch(`${BASE_URL}/reports/payments?${params}`, {
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -443,7 +465,7 @@ export const reportAPI = {
   getStaffPerformance: async (filters: { period?: string; staff?: string }) => {
     const params = new URLSearchParams(filters as any);
     const res = await fetch(`${BASE_URL}/reports/staff-performance?${params}`, {
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -452,7 +474,7 @@ export const reportAPI = {
   getCustomers: async (filters: { period?: string; status?: string }) => {
     const params = new URLSearchParams(filters as any);
     const res = await fetch(`${BASE_URL}/reports/customers?${params}`, {
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -463,7 +485,7 @@ export const reportAPI = {
 
 export const settingsAPI = {
   get: async () => {
-    const res = await fetch(`${BASE_URL}/settings`, { headers: MOCK_HEADERS });
+    const res = await fetch(`${BASE_URL}/settings`, { headers: authHeaders() });
     if (!res.ok) throw await res.json();
     return res.json();
   },
@@ -478,7 +500,7 @@ export const settingsAPI = {
   saveGeneral: async (data: any) => {
     const res = await fetch(`${BASE_URL}/settings/general`, {
       method: "PUT",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
       body: JSON.stringify(data),
     });
     if (!res.ok) throw await res.json();
@@ -488,7 +510,7 @@ export const settingsAPI = {
   saveBusiness: async (data: any) => {
     const res = await fetch(`${BASE_URL}/settings/business`, {
       method: "PUT",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
       body: JSON.stringify(data),
     });
     if (!res.ok) throw await res.json();
@@ -498,7 +520,7 @@ export const settingsAPI = {
   savePricing: async (serviceId: number, pricing: any) => {
     const res = await fetch(`${BASE_URL}/settings/pricing/${serviceId}`, {
       method: "PUT",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
       body: JSON.stringify({ pricing }),
     });
     if (!res.ok) throw await res.json();
@@ -513,7 +535,7 @@ export const settingsAPI = {
   }) => {
     const res = await fetch(`${BASE_URL}/settings/pricing`, {
       method: "POST",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
       body: JSON.stringify(data),
     });
     if (!res.ok) throw await res.json();
@@ -523,7 +545,7 @@ export const settingsAPI = {
   deleteService: async (serviceId: number) => {
     const res = await fetch(`${BASE_URL}/settings/pricing/${serviceId}`, {
       method: "DELETE",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -535,7 +557,15 @@ export const settingsAPI = {
 export const gpsAPI = {
   getActiveCleaners: async () => {
     const res = await fetch(`${BASE_URL}/gps/active-cleaners`, {
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
+    });
+    if (!res.ok) throw await res.json();
+    return res.json();
+  },
+
+  getCompletedToday: async () => {
+    const res = await fetch(`${BASE_URL}/gps/completed-today`, {
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();
@@ -554,8 +584,46 @@ export const gpsAPI = {
   ) => {
     const res = await fetch(`${BASE_URL}/gps/cleaners/${staffId}/status`, {
       method: "PUT",
-      headers: MOCK_HEADERS,
+      headers: authHeaders(),
       body: JSON.stringify(data),
+    });
+    if (!res.ok) throw await res.json();
+    return res.json();
+  },
+};
+// ─── OFFERS ───────────────────────────────────────────────────────────────────
+export const offerAPI = {
+  // Admin — every offer, active or not.
+  getAll: async () => {
+    const res = await fetch(`${BASE_URL}/offers/all`, { headers: authHeaders() });
+    if (!res.ok) throw await res.json();
+    return res.json();
+  },
+
+  create: async (data: any) => {
+    const res = await fetch(`${BASE_URL}/offers`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw await res.json();
+    return res.json();
+  },
+
+  update: async (id: string, data: any) => {
+    const res = await fetch(`${BASE_URL}/offers/${id}`, {
+      method: "PUT",
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw await res.json();
+    return res.json();
+  },
+
+  remove: async (id: string) => {
+    const res = await fetch(`${BASE_URL}/offers/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
     });
     if (!res.ok) throw await res.json();
     return res.json();

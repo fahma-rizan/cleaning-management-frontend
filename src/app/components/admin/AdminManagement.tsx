@@ -269,7 +269,10 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
       await adminAPI.deactivate(admin._id);
       setAdmins((prev) =>
         prev.map((a) =>
-          a._id === admin._id ? { ...a, status: "Inactive" as "Inactive" } : a,
+          // Was setting `status`, a field AdminUser doesn't have — the
+          // badge/button label read `adminStatus`, so the API call
+          // succeeded but the row never visually updated until a refresh.
+          a._id === admin._id ? { ...a, adminStatus: "Inactive" as "Inactive" } : a,
         ),
       );
     } catch (err: any) {
@@ -284,7 +287,7 @@ export function AdminManagement({ currentUser }: AdminManagementProps) {
       await adminAPI.activate(admin._id);
       setAdmins((prev) =>
         prev.map((a) =>
-          a._id === admin._id ? { ...a, status: "Active" as "Active" } : a,
+          a._id === admin._id ? { ...a, adminStatus: "Active" as "Active" } : a,
         ),
       );
     } catch (err: any) {

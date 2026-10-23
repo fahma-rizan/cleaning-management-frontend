@@ -308,7 +308,7 @@ export default function App() {
               }
             />
             <Route
-              path="reviews/:serviceId"
+              path="reviews/:bookingId"
               element={
                 <Reviews
                   user={user}

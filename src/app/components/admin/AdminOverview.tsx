@@ -127,12 +127,13 @@ export default function AdminOverview() {
     }
     setLoadingAll(true);
     try {
-      const data = await fetch(
-        "http://localhost:5000/api/overview/recent-bookings?all=true",
-        {
-          headers: { "Content-Type": "application/json" },
-        },
-      ).then((r) => r.json());
+      // Was a raw fetch with no Authorization header — always 401'd once
+      // protect+requireRole was added to /overview routes, and the missing
+      // .ok check meant the resulting {success:false, message:...} error
+      // object got set as the bookings list and crashed the table render
+      // instead of showing anything. overviewAPI.getRecentBookings already
+      // sends the real auth token; passing true here adds ?all=true.
+      const data = await overviewAPI.getRecentBookings(true);
       setAllBookings(data);
       setShowAllBookings(true);
     } catch (err) {

@@ -36,7 +36,6 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { fetchWithAuth } from "../utils/api";
 import imgLogo from "figma:asset/d0e24839a24076173960597a25c12b48f3330fdf.png";
-import OngoingBookingCard from "./dashboard/OngoingBookingCard";
 import UpcomingBookingsList from "./dashboard/UpcomingBookingsList";
 import OngoingActivityPanel from "./dashboard/OngoingActivityPanel";
 import logo from "figma:asset/d0e24839a24076173960597a25c12b48f3330fdf.png";
@@ -161,6 +160,7 @@ export default function CustomerDashboard({
   const upcomingBookings = bookings
     .filter((b) => {
       if (b.status === "cancelled" || b.status === "completed") return false;
+      if (b.status === "in-progress" || (b.status === "confirmed" && b.onTheWayAt)) return false;
       return new Date(b.date) >= new Date(new Date().setHours(0, 0, 0, 0));
     })
     .sort((a, b) => {
@@ -172,6 +172,10 @@ export default function CustomerDashboard({
       // 3. Same date + time → order by when the booking was created
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
+
+  const ongoingBookings = bookings.filter(
+    (b) => b.status === "in-progress" || (b.status === "confirmed" && b.onTheWayAt),
+  );
 
   const totalBookings = bookings.filter((b) => b.status !== 'cancelled').length;
   const activeServices = bookings.filter((b) => b.status === 'in-progress').length;
@@ -311,137 +315,70 @@ export default function CustomerDashboard({
 
         <div className="flex flex-col gap-6">
           {/* Row 1: Ongoing Activity Card */}
-          <div className="w-full">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm">
-              {/* Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">🔄</span>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                    Ongoing Activity
-                  </h3>
-                  <div className="flex items-center gap-2 px-3 py-1 bg-green-50 dark:bg-green-900/20 rounded-full">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span className="text-xs font-bold text-green-700 dark:text-green-400">
-                      1 Active
-                    </span>
+          {ongoingBookings.length > 0 && (
+            <div className="w-full">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">🔄</span>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                      Ongoing Activity
+                    </h3>
+                    <div className="flex items-center gap-2 px-3 py-1 bg-green-50 dark:bg-green-900/20 rounded-full">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <span className="text-xs font-bold text-green-700 dark:text-green-400">
+                        {ongoingBookings.length} Active
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={goToOngoing}
+                    className="text-sm font-bold text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 flex items-center gap-1"
+                  >
+                    View All
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Booking Summary */}
+                <div className="mb-6 p-4 bg-purple-50 dark:bg-purple-900/10 rounded-xl">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <h4 className="font-bold text-gray-900 dark:text-white mb-1">
+                        {ongoingBookings[0].serviceName}
+                      </h4>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                        Booking ID: {ongoingBookings[0].bookingId}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-3 border-t border-purple-100 dark:border-purple-800">
+                    <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                      {ongoingBookings[0].assignedStaffName?.charAt(0) ?? "S"}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-gray-900 dark:text-white">
+                        {ongoingBookings[0].assignedStaffName || "Staff assigned"}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Service Professional
+                      </p>
+                    </div>
                   </div>
                 </div>
+
+                {/* Track Button */}
                 <button
                   onClick={goToOngoing}
-                  className="text-sm font-bold text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 flex items-center gap-1"
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20"
                 >
-                  View All
-                  <ChevronRight className="w-4 h-4" />
+                  Track Your Booking
+                  <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
-
-              {/* Booking Summary */}
-              <div className="mb-6 p-4 bg-purple-50 dark:bg-purple-900/10 rounded-xl">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h4 className="font-bold text-gray-900 dark:text-white mb-1">
-                      Home Cleaning - Regular Cleaning
-                    </h4>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                      Booking ID: BK-1001
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                      ETA
-                    </p>
-                    <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
-                      12:30 PM
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 pt-3 border-t border-purple-100 dark:border-purple-800">
-                  <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                    MC
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">
-                      Maria Chen
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Service Professional
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Mini Progress Timeline */}
-              <div className="mb-6">
-                <div className="flex items-center justify-between relative">
-                  {/* Progress Line */}
-                  <div className="absolute top-4 left-0 right-0 h-0.5 bg-gray-200 dark:bg-gray-700"></div>
-                  <div
-                    className="absolute top-4 left-0 h-0.5 bg-purple-600"
-                    style={{ width: "66%" }}
-                  ></div>
-
-                  {/* Steps */}
-                  {["En Route", "Started", "In Progress", "Completed"].map(
-                    (step, idx) => {
-                      const isCompleted = idx < 2;
-                      const isCurrent = idx === 2;
-                      const isPending = idx > 2;
-
-                      return (
-                        <div
-                          key={step}
-                          className="flex flex-col items-center relative z-10 flex-1"
-                        >
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center border-2 mb-2 transition-all ${
-                              isCompleted
-                                ? "bg-purple-600 border-purple-600"
-                                : isCurrent
-                                  ? "bg-white dark:bg-gray-800 border-purple-600 ring-4 ring-purple-100 dark:ring-purple-900/30"
-                                  : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
-                            }`}
-                          >
-                            {isCompleted ? (
-                              <span className="text-white text-lg">✓</span>
-                            ) : (
-                              <span
-                                className={`text-xs font-bold ${
-                                  isCurrent
-                                    ? "text-purple-600"
-                                    : "text-gray-400"
-                                }`}
-                              >
-                                {idx + 1}
-                              </span>
-                            )}
-                          </div>
-                          <p
-                            className={`text-[10px] font-bold text-center ${
-                              isCurrent
-                                ? "text-purple-600 dark:text-purple-400"
-                                : "text-gray-500 dark:text-gray-400"
-                            }`}
-                          >
-                            {step}
-                          </p>
-                        </div>
-                      );
-                    },
-                  )}
-                </div>
-              </div>
-
-              {/* Track Button */}
-              <button
-                onClick={goToOngoing}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20"
-              >
-                Track Your Booking
-                <ChevronRight className="w-5 h-5" />
-              </button>
             </div>
-          </div>
+          )}
 
           {/* Row 2: Upcoming Booking or Empty State */}
           <div className="w-full">
@@ -466,27 +403,6 @@ export default function CustomerDashboard({
   };
 
   const renderBookings = () => {
-    // Mock ongoing booking data
-    const ongoingBooking = {
-      bookingId: "BK-1001",
-      serviceName: "Home Cleaning",
-      serviceType: "Regular Cleaning",
-      staff: {
-        name: "Maria Chen",
-        avatar: "MC",
-        role: "Service Professional",
-      },
-      status: "in-progress" as const,
-      address: "123 Oak Street, Unit 4B",
-      startTime: "9:00 AM",
-      eta: "12:30 PM",
-      progress: 68,
-    };
-
-    const ongoingBookings = bookings.filter(
-      (b) => b.status !== "completed" && b.status !== "cancelled",
-    );
-
     const pastBookings = bookings.filter(
       (b) => b.status === "completed" || b.status === "cancelled",
     );
@@ -543,11 +459,19 @@ export default function CustomerDashboard({
           {bookingTab === "ongoing" &&
             (ongoingBookings.length > 0 ? (
               <div className="space-y-6">
-                <OngoingActivityPanel />
+                <OngoingActivityPanel booking={ongoingBookings[0]} />
               </div>
             ) : (
-              <div className="space-y-6">
-                <OngoingActivityPanel />
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-12 text-center border border-gray-100 dark:border-gray-700">
+                <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <ClipboardList className="w-10 h-10 text-gray-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                  No Ongoing Service
+                </h3>
+                <p className="text-gray-500 dark:text-gray-400">
+                  You don't have any service in progress right now.
+                </p>
               </div>
             ))}
 
@@ -674,7 +598,8 @@ export default function CustomerDashboard({
                               Rebook
                             </Link>
                             <Link
-                              to={`/reviews/${booking.serviceId || "1"}`}
+                              to={`/reviews/${booking._id}`}
+                              state={{ booking }}
                               className="flex items-center gap-2 px-4 py-2 border border-purple-200 text-purple-600 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 font-bold text-sm transition-all"
                             >
                               <Star className="w-4 h-4" />

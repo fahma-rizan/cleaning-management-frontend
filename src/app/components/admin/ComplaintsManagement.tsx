@@ -460,7 +460,7 @@ export function ComplaintsManagement() {
                 <div className="grid grid-cols-[140px_1fr] gap-y-2">
                   <span className="text-gray-600">Booking ID:</span>
                   <span className="text-gray-900">
-                    {selectedComplaint.bookingId}
+                    {selectedComplaint.bookingId || "N/A"}
                   </span>
 
                   <span className="text-gray-600">Service:</span>

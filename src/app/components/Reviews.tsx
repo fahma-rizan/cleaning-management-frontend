@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Star, ThumbsUp, MessageCircle } from 'lucide-react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { Star } from 'lucide-react';
 import Header from './Header';
 import BackButton from './BackButton';
 import type { User } from '../types';
 import type { FormEvent } from 'react';
+import { fetchWithAuth } from '../utils/api';
 
 interface ReviewsProps {
   user: User | null;
@@ -12,28 +13,65 @@ interface ReviewsProps {
 }
 
 export default function Reviews({ user, onLogout }: ReviewsProps) {
-  const { serviceId } = useParams();
+  const { bookingId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const booking = (location.state as { booking?: any } | null)?.booking;
+
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
   const [review, setReview] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    
+
     if (rating === 0) {
       alert('Please select a rating');
       return;
     }
+    if (!bookingId) {
+      setError('Missing booking reference — please go back and try again.');
+      return;
+    }
 
-    // In real app, this would save to backend
-    setSubmitted(true);
-    
-    setTimeout(() => {
-      navigate(`/services/${serviceId}`);
-    }, 2000);
+    setSubmitting(true);
+    setError('');
+    try {
+      const data = await fetchWithAuth('/reviews', {
+        method: 'POST',
+        body: JSON.stringify({ bookingId, rating, content: review }),
+      });
+
+      if (data.error) {
+        setError(data.error);
+        setSubmitting(false);
+        return;
+      }
+
+      setSubmitted(true);
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 2000);
+    } catch (err) {
+      console.error('Review submit error:', err);
+      setError('Failed to submit review. Please try again.');
+      setSubmitting(false);
+    }
   };
+
+  if (!bookingId) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header user={user} onLogout={onLogout} />
+        <div className="container mx-auto px-4 py-16 text-center text-gray-500">
+          No booking specified for this review.
+        </div>
+      </div>
+    );
+  }
 
   if (submitted) {
     return (
@@ -63,7 +101,19 @@ export default function Reviews({ user, onLogout }: ReviewsProps) {
           <BackButton />
           <div className="bg-white rounded-xl p-8 shadow-sm">
             <h1 className="text-3xl mb-2">Write a Review</h1>
-            <p className="text-gray-600 mb-8">Share your experience with this service</p>
+            <p className="text-gray-600 mb-2">Share your experience with this service</p>
+            {booking?.serviceName && (
+              <p className="text-sm text-gray-500 mb-6">
+                Reviewing: <span className="font-semibold">{booking.serviceName}</span>
+                {booking.bookingId && <span className="font-mono ml-2 text-xs">({booking.bookingId})</span>}
+              </p>
+            )}
+
+            {error && (
+              <div className="mb-6 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
@@ -112,9 +162,10 @@ export default function Reviews({ user, onLogout }: ReviewsProps) {
 
               <button
                 type="submit"
-                className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition-colors text-lg"
+                disabled={submitting}
+                className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 disabled:bg-purple-300 disabled:cursor-not-allowed transition-colors text-lg"
               >
-                Submit Review
+                {submitting ? 'Submitting…' : 'Submit Review'}
               </button>
             </form>
           </div>
